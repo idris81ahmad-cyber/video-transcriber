@@ -13,6 +13,7 @@ No cloud. No API keys. Works offline after the first model download.
 ## Highlights
 
 - 🎬 Transcribe **video** (MP4, MOV, MKV, WebM…) or **audio** files
+- 🎥 **YouTube & URL support** (via yt-dlp) — just paste a link
 - ⚡ Extremely fast thanks to CTranslate2 + optional GPU
 - 🌐 Auto language detection + 99 languages
 - ⏱️ Segment or **word-level** timestamps
@@ -50,7 +51,11 @@ cd video-transcriber
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 
+# Core only
 pip install -e .
+
+# With YouTube / URL support
+pip install -e ".[url]"
 ```
 
 After installation you can use either:
@@ -66,8 +71,11 @@ transcribe --help
 ## Quick Start
 
 ```bash
-# Basic transcription (creates interview.txt next to the video)
+# Local file
 video-transcriber transcribe interview.mp4
+
+# YouTube / any supported URL
+video-transcriber transcribe "https://www.youtube.com/watch?v=dQw4w9WgXcQ" -f srt
 
 # High quality subtitles
 video-transcriber transcribe lecture.mp4 -m medium -f srt
@@ -81,9 +89,27 @@ video-transcriber transcribe ./recordings -r -f srt --skip-existing
 # Force language + GPU
 video-transcriber transcribe video.mp4 -l en -d cuda -m large-v3
 
-# Word-level timestamps (great for precise editing)
+# Word-level timestamps
 video-transcriber transcribe podcast.mp3 --word-timestamps -f json
 ```
+
+---
+
+## YouTube & URL Support
+
+Any URL that **yt-dlp** can handle works (YouTube, Vimeo, Twitter/X, many others).
+
+```bash
+# Install the optional extra once
+pip install 'video-transcriber[url]'
+
+# Then just pass the link
+video-transcriber transcribe "https://youtu.be/XXXX" -m medium -f srt,vtt
+```
+
+- The tool downloads **audio only** (much faster & smaller)
+- Temporary files are cleaned up automatically
+- Output is saved in the current directory using a sanitized title
 
 ---
 
@@ -92,7 +118,7 @@ video-transcriber transcribe podcast.mp3 --word-timestamps -f json
 | Command | Description |
 |---------|-------------|
 | `transcribe` | Main transcription command |
-| `doctor`    | Check ffmpeg, CUDA, package health |
+| `doctor`    | Check ffmpeg, yt-dlp, CUDA, package health |
 | `models`    | Show model size / speed / accuracy table |
 | `--version` | Show package version |
 
@@ -100,7 +126,7 @@ video-transcriber transcribe podcast.mp3 --word-timestamps -f json
 
 ```
 Arguments:
-  INPUTS...                 Files, folders, or (future) URLs
+  INPUTS...                 Files, folders, or YouTube/URLs
 
 Model:
   -m, --model               tiny | base | small | medium | large-v2 | large-v3
@@ -151,6 +177,7 @@ video-transcriber doctor
 This verifies:
 - Python version
 - ffmpeg availability
+- yt-dlp (for URL support)
 - CUDA / GPU status
 - faster-whisper installation
 
@@ -163,6 +190,7 @@ This verifies:
 3. **Precise subtitles** → `--word-timestamps -f srt`
 4. **Batch jobs** → always use `--skip-existing` so you can resume
 5. First run downloads the model (cached in `~/.cache/huggingface/`)
+6. For YouTube: prefer the `[url]` extra so downloads stay efficient (audio-only)
 
 ---
 
@@ -173,7 +201,7 @@ src/video_transcriber/
 ├── cli.py          # Typer + Rich CLI
 ├── core.py         # Transcription engine
 ├── exporters.py    # TXT / SRT / VTT / JSON writers
-├── utils.py        # ffmpeg, file discovery, timestamps
+├── utils.py        # ffmpeg, yt-dlp, file discovery, timestamps
 ├── __init__.py
 └── __main__.py
 ```
