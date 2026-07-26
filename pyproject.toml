@@ -1,15 +1,19 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.21.0"]
 build-backend = "hatchling.build"
 
 [project]
 name = "video-transcriber"
 version = "1.0.0"
-description = "Fast, accurate, local video & audio transcription powered by Faster-Whisper"
+description = "Fast, accurate, fully local video & audio transcription powered by Faster-Whisper"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [
+    { name = "idris81ahmad-cyber", email = "idris81ahmad@gmail.com" }
+]
+maintainers = [
     { name = "idris81ahmad-cyber", email = "idris81ahmad@gmail.com" }
 ]
 keywords = [
@@ -18,9 +22,14 @@ keywords = [
     "speech-to-text",
     "faster-whisper",
     "video",
+    "audio",
     "subtitle",
     "srt",
+    "vtt",
     "cli",
+    "youtube",
+    "local",
+    "offline",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -34,9 +43,11 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Multimedia :: Sound/Audio :: Speech",
     "Topic :: Multimedia :: Video",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
 ]
 dependencies = [
     "faster-whisper>=1.0.3",
@@ -49,6 +60,8 @@ url = ["yt-dlp>=2024.1.0"]
 dev = [
     "ruff>=0.4.0",
     "mypy>=1.8.0",
+    "build>=1.0.0",
+    "twine>=5.0.0",
 ]
 
 [project.scripts]
@@ -59,17 +72,19 @@ transcribe = "video_transcriber.cli:app"
 Homepage = "https://github.com/idris81ahmad-cyber/video-transcriber"
 Repository = "https://github.com/idris81ahmad-cyber/video-transcriber"
 Issues = "https://github.com/idris81ahmad-cyber/video-transcriber/issues"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/video_transcriber"]
+Changelog = "https://github.com/idris81ahmad-cyber/video-transcriber/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "/src",
-    "/README.md",
-    "/LICENSE",
-    "/pyproject.toml",
+    "src/video_transcriber",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "pyproject.toml",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/video_transcriber"]
 
 [tool.ruff]
 line-length = 100
@@ -77,3 +92,9 @@ target-version = "py39"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
