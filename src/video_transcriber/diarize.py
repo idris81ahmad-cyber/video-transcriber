@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List
 
 from rich.console import Console
 
@@ -49,12 +50,28 @@ def load_diarization_pipeline(device: str = "cpu"):
             "Set it as: export HF_TOKEN=hf_..."
         ) from e
 
+    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    if not token:
+        raise RuntimeError(
+            "HF_TOKEN is not set.\n"
+            "1. Accept model conditions: https://huggingface.co/pyannote/speaker-diarization-3.1\n"
+            "2. Create a token: https://huggingface.co/settings/tokens\n"
+            "3. export HF_TOKEN=hf_..."
+        )
+
     console.print("[bold cyan]Loading speaker diarization pipeline…[/]")
 
-    pipeline = Pipeline.from_pretrained(
-        "pyannote/speaker-diarization-3.1",
-        use_auth_token=True,  # uses HF_TOKEN / huggingface-cli login
-    )
+    # Prefer modern `token=` API; fall back for older pyannote versions
+    try:
+        pipeline = Pipeline.from_pretrained(
+            "pyannote/speaker-diarization-3.1",
+            token=token,
+        )
+    except TypeError:
+        pipeline = Pipeline.from_pretrained(
+            "pyannote/speaker-diarization-3.1",
+            use_auth_token=token,
+        )
 
     if device == "cuda" and torch.cuda.is_available():
         pipeline.to(torch.device("cuda"))
@@ -80,7 +97,6 @@ def run_diarization(pipeline, audio_path: Path) -> List[SpeakerSegment]:
             )
         )
 
-    # Sort by start time
     segments.sort(key=lambda s: s.start)
     return segments
 
@@ -92,8 +108,7 @@ def assign_speakers_to_transcript(
     """
     Assign the most overlapping speaker to each transcript segment.
 
-    Mutates the segments in-place by adding a `.speaker` attribute
-    and returns the same list for convenience.
+    Mutates the segments in-place by adding a `.speaker` attribute.
     """
     if not speaker_segments:
         for seg in transcript_segments:
@@ -105,7 +120,6 @@ def assign_speakers_to_transcript(
         best_overlap = 0.0
 
         for sp in speaker_segments:
-            # Compute temporal overlap
             overlap_start = max(seg.start, sp.start)
             overlap_end = min(seg.end, sp.end)
             overlap = max(0.0, overlap_end - overlap_start)
