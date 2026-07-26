@@ -1,44 +1,90 @@
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
-.yarn/install-state.gz
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
 
-# testing
-/coverage
+# C extensions
+*.so
 
-# next.js
-/.next/
-/out/
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# production
-/build
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
 
-# misc
-.DS_Store
-*.pem
+# PyInstaller
+*.manifest
+*.spec
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
 
-# local env files
-.env*.local
+# Unit test / coverage
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Environment
 .env
+.env.*
 
-# vercel
-.vercel
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# OS
+.DS_Store
+Thumbs.db
 
-# uploads / temp files
-/uploads
-/tmp
+# Project specific
 *.mp4
 *.mov
+*.mkv
 *.webm
+*.avi
 *.mp3
 *.wav
+*.m4a
+*.flac
+*.srt
+*.vtt
+*.json
+!package.json
+tmp/
+uploads/
