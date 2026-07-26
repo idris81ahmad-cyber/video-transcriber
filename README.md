@@ -15,10 +15,10 @@ No cloud. No API keys. Works offline after the first model download.
 - 🎬 Transcribe **video** or **audio** files
 - 🎥 **YouTube & URL** support
 - 👥 **Speaker diarization**
+- 🌐 **Web UI** (Gradio)
 - ⚡ Concurrent batch processing (`--workers`)
 - 📄 Config file for permanent defaults
 - 📝 TXT / SRT / VTT / JSON export
-- 🖥️ Beautiful terminal progress (overall + ETA)
 
 ---
 
@@ -30,8 +30,9 @@ cd video-transcriber
 python -m venv .venv && source .venv/bin/activate
 
 pip install -e .
-pip install -e ".[url]"             # YouTube
-pip install -e ".[diarization]"     # Speakers
+pip install -e ".[url]"              # YouTube
+pip install -e ".[diarization]"      # Speakers
+pip install -e ".[web]"              # Browser UI
 ```
 
 Requires **FFmpeg** in PATH.
@@ -41,31 +42,38 @@ Requires **FFmpeg** in PATH.
 ## Quick Start
 
 ```bash
-# Single file (default command)
+# CLI
 video-transcriber interview.mp4
-
-# Batch folder with 2 workers + SRT
 video-transcriber ./lectures -r -f srt --workers 2
-
-# YouTube + diarization
 video-transcriber "https://youtu.be/XXXX" --diarize -f srt
 
-# High quality
-video-transcriber meeting.mp4 -m medium -d cuda -f srt,json
+# Web UI
+video-transcriber web
+# then open http://127.0.0.1:7860
 ```
 
 ---
 
-## Concurrent Batch Processing
+## Web UI
 
 ```bash
-# Process many files in parallel
-video-transcriber ./recordings -r -f srt --workers 4 --skip-existing
+pip install 'video-transcriber[web]'
+video-transcriber web
 ```
 
-- `--workers 1` (default) — sequential, safest for GPU
-- `--workers N` — parallel workers with a shared model lock
-- Progress bar shows overall completion + ETA
+Options:
+
+```bash
+video-transcriber web --port 8080
+video-transcriber web --share          # public Gradio link
+video-transcriber web --host 0.0.0.0   # listen on all interfaces
+```
+
+Features:
+- Upload video/audio or paste a YouTube URL
+- Choose model, device, language, formats
+- Optional speaker diarization
+- Download TXT / SRT / VTT / JSON
 
 ---
 
@@ -78,23 +86,6 @@ device = "cuda"
 format = "srt"
 workers = 2
 skip_existing = true
-diarize = false
-```
-
-Then just run:
-
-```bash
-video-transcriber meeting.mp4
-```
-
----
-
-## Speaker Diarization
-
-```bash
-pip install 'video-transcriber[diarization]'
-export HF_TOKEN=hf_xxxxxxxx   # after accepting model conditions
-video-transcriber meeting.mp4 --diarize -f srt
 ```
 
 ---
@@ -104,9 +95,9 @@ video-transcriber meeting.mp4 --diarize -f srt
 | Command | Description |
 |---------|-------------|
 | *(default)* | Transcribe files / folders / URLs |
+| `web` | Launch browser UI |
 | `doctor` | System check |
 | `models` | Model recommendations |
-| `--version` | Version |
 
 ---
 
