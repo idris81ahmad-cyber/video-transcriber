@@ -15,6 +15,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from video_transcriber import __version__
+from video_transcriber.config import load_config
 from video_transcriber.core import load_model, save_result, transcribe_file
 from video_transcriber.utils import (
     MEDIA_EXTS,
@@ -24,6 +25,9 @@ from video_transcriber.utils import (
     download_from_url,
     is_url,
 )
+
+# Load user config once so CLI options can use it as defaults
+_CFG = load_config()
 
 app = typer.Typer(
     name="video-transcriber",
@@ -72,85 +76,85 @@ def transcribe(
         help="One or more media files, folders, or YouTube/URL links.",
     ),
     model: str = typer.Option(
-        "small",
+        _CFG["model"],
         "--model",
         "-m",
         help="Whisper model size: tiny, base, small, medium, large-v2, large-v3",
         rich_help_panel="Model",
     ),
     device: str = typer.Option(
-        "cpu",
+        _CFG["device"],
         "--device",
         "-d",
         help="Device to run on: cpu or cuda",
         rich_help_panel="Model",
     ),
     compute_type: Optional[str] = typer.Option(
-        None,
+        _CFG["compute_type"],
         "--compute-type",
         help="Quantization (int8, float16, float32…). Auto if omitted.",
         rich_help_panel="Model",
     ),
     language: Optional[str] = typer.Option(
-        None,
+        _CFG["language"],
         "--language",
         "-l",
         help="Language code (en, ha, yo, fr…). Auto-detect if omitted.",
         rich_help_panel="Transcription",
     ),
     formats: str = typer.Option(
-        "txt",
+        _CFG["format"],
         "--format",
         "-f",
         help="Output format(s), comma-separated: txt,srt,vtt,json",
         rich_help_panel="Output",
     ),
     output: Optional[Path] = typer.Option(
-        None,
+        Path(_CFG["output"]) if _CFG["output"] else None,
         "--output",
         "-o",
         help="Output file or directory. Defaults next to the source (or current dir for URLs).",
         rich_help_panel="Output",
     ),
     word_timestamps: bool = typer.Option(
-        False,
+        _CFG["word_timestamps"],
         "--word-timestamps",
         help="Generate word-level timestamps (slower, more detailed).",
         rich_help_panel="Transcription",
     ),
     beam_size: int = typer.Option(
-        5,
+        _CFG["beam_size"],
         "--beam-size",
         help="Beam size for decoding.",
         rich_help_panel="Transcription",
     ),
     vad_filter: bool = typer.Option(
-        True,
+        _CFG["vad"],
         "--vad/--no-vad",
         help="Enable/disable voice activity detection filter.",
         rich_help_panel="Transcription",
     ),
     diarize: bool = typer.Option(
-        False,
-        "--diarize",
+        _CFG["diarize"],
+        "--diarize/--no-diarize",
         help="Enable speaker diarization (requires [diarization] extra + HF token).",
         rich_help_panel="Transcription",
     ),
     recursive: bool = typer.Option(
-        False,
+        _CFG["recursive"],
         "--recursive",
         "-r",
         help="When given a folder, search recursively.",
         rich_help_panel="Input",
     ),
     skip_existing: bool = typer.Option(
-        False,
-        "--skip-existing",
+        _CFG["skip_existing"],
+        "--skip-existing/--no-skip-existing",
         help="Skip files that already have a transcript in the target format.",
         rich_help_panel="Output",
     ),
     quiet: bool = typer.Option(
-        False,
+        _CFG["quiet"],
         "--quiet",
         "-q",
         help="Reduce output verbosity.",
@@ -160,13 +164,10 @@ def transcribe(
     """
     Transcribe one or more video/audio files, folders, or YouTube/URLs.
 
-    Examples:
+    You can also call this as the default command:
 
-      video-transcriber transcribe interview.mp4
-
-      video-transcriber transcribe interview.mp4 --diarize -f srt
-
-      video-transcriber transcribe "https://www.youtube.com/watch?v=dQw4w9WgXcQ" -f srt
+      video-transcriber interview.mp4
+      video-transcriber interview.mp4 --diarize -f srt
     """
     fmt_list = [f.strip().lower() for f in formats.split(",") if f.strip()]
     valid_fmts = {"txt", "srt", "vtt", "json"}
@@ -394,7 +395,6 @@ def doctor() -> None:
     else:
         table.add_row("yt-dlp", "[yellow]—[/]", "Not installed (optional — YouTube/URLs)")
 
-    # Diarization
     try:
         from video_transcriber.diarize import check_diarization_available
 
@@ -459,5 +459,23 @@ def models() -> None:
     )
 
 
-if __name__ == "__main__":
+def run() -> None:
+    """
+    Entry point that makes `transcribe` the default command.
+
+    So both of these work:
+
+      video-transcriber interview.mp4
+      video-transcriber transcribe interview.mp4
+    """
+    known_commands = {"transcribe", "doctor", "models"}
+    # Flags that should not trigger the default command injection
+    if len(sys.argv) > 1:
+        first = sys.argv[1]
+        if first not in known_commands and not first.startswith("-"):
+            sys.argv.insert(1, "transcribe")
     app()
+
+
+if __name__ == "__main__":
+    run()
