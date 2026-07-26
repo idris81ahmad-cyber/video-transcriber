@@ -38,15 +38,18 @@ def load_model(
     device: str = "cpu",
     compute_type: Optional[str] = None,
     download_root: Optional[str] = None,
+    *,
+    quiet: bool = False,
 ) -> WhisperModel:
     """Load a Faster-Whisper model with sensible defaults."""
     if compute_type is None:
         compute_type = "float16" if device == "cuda" else "int8"
 
-    console.print(
-        f"[bold cyan]Loading model[/] [yellow]{model_size}[/] "
-        f"on [green]{device}[/] ([dim]{compute_type}[/])…"
-    )
+    if not quiet:
+        console.print(
+            f"[bold cyan]Loading model[/] [yellow]{model_size}[/] "
+            f"on [green]{device}[/] ([dim]{compute_type}[/])…"
+        )
 
     return WhisperModel(
         model_size,
@@ -68,6 +71,7 @@ def transcribe_file(
     diarize: bool = False,
     diarization_pipeline: Any = None,
     device: str = "cpu",
+    quiet: bool = False,
 ) -> TranscriptionResult:
     """
     Transcribe a single media file.
@@ -82,11 +86,13 @@ def transcribe_file(
 
     try:
         if is_video:
-            console.print(f"[dim]Extracting audio from[/] {media_path.name}…")
+            if not quiet:
+                console.print(f"[dim]Extracting audio from[/] {media_path.name}…")
             temp_audio = extract_audio(media_path)
             audio_path = temp_audio
 
-        console.print(f"[bold]Transcribing[/] {media_path.name}…")
+        if not quiet:
+            console.print(f"[bold]Transcribing[/] {media_path.name}…")
 
         segments_gen, info = model.transcribe(
             str(audio_path),
@@ -97,24 +103,27 @@ def transcribe_file(
             vad_parameters=vad_parameters or {},
         )
 
-        # Collect all segments while showing a nice progress bar
         segments: List[Any] = []
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            TimeElapsedColumn(),
-            TimeRemainingColumn(),
-            console=console,
-            transient=True,
-        ) as progress:
-            task = progress.add_task("Processing segments…", total=None)
+        if quiet:
+            # Fast path — no progress UI
             for segment in segments_gen:
                 segments.append(segment)
-                progress.update(task, advance=1)
+        else:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                TimeElapsedColumn(),
+                TimeRemainingColumn(),
+                console=console,
+                transient=True,
+            ) as progress:
+                task = progress.add_task("Processing segments…", total=None)
+                for segment in segments_gen:
+                    segments.append(segment)
+                    progress.update(task, advance=1)
 
-        # Optional speaker diarization
         if diarize:
             from video_transcriber.diarize import (
                 assign_speakers_to_transcript,
@@ -126,8 +135,9 @@ def transcribe_file(
             speaker_turns = run_diarization(pipeline, audio_path)
             segments = assign_speakers_to_transcript(segments, speaker_turns)
 
-            n_speakers = len({getattr(s, "speaker", "?") for s in segments})
-            console.print(f"[green]✓[/] Detected [bold]{n_speakers}[/] speaker(s)")
+            if not quiet:
+                n_speakers = len({getattr(s, "speaker", "?") for s in segments})
+                console.print(f"[green]✓[/] Detected [bold]{n_speakers}[/] speaker(s)")
 
         return TranscriptionResult(
             segments=segments,
