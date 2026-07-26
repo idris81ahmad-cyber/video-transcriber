@@ -26,7 +26,7 @@ No cloud. No API keys. Works offline after the first model download.
 
 ## Installation
 
-### 1. Prerequisites
+### Prerequisites
 
 - Python 3.9+
 - [FFmpeg](https://ffmpeg.org/) in your PATH
@@ -42,7 +42,7 @@ sudo apt update && sudo apt install ffmpeg
 # Download from https://ffmpeg.org/download.html and add to PATH
 ```
 
-### 2. Install the package
+### Install from source (recommended while developing)
 
 ```bash
 git clone https://github.com/idris81ahmad-cyber/video-transcriber.git
@@ -65,6 +65,9 @@ video-transcriber --help
 # or
 transcribe --help
 ```
+
+> Once published to PyPI you will also be able to install with:
+> `pip install video-transcriber` or `pip install "video-transcriber[url]"`
 
 ---
 
@@ -122,35 +125,6 @@ video-transcriber transcribe "https://youtu.be/XXXX" -m medium -f srt,vtt
 | `models`    | Show model size / speed / accuracy table |
 | `--version` | Show package version |
 
-### `transcribe` options
-
-```
-Arguments:
-  INPUTS...                 Files, folders, or YouTube/URLs
-
-Model:
-  -m, --model               tiny | base | small | medium | large-v2 | large-v3
-  -d, --device              cpu | cuda
-  --compute-type            int8 | float16 | float32 | …
-
-Transcription:
-  -l, --language            Language code (auto-detect if omitted)
-  --word-timestamps         Enable word-level timestamps
-  --beam-size               Beam size (default 5)
-  --vad / --no-vad          Voice Activity Detection filter
-
-Output:
-  -f, --format              txt,srt,vtt,json (comma-separated)
-  -o, --output              Output file or directory
-  --skip-existing           Skip files that already have transcripts
-
-Input:
-  -r, --recursive           Search folders recursively
-
-General:
-  -q, --quiet               Less verbose output
-```
-
 ---
 
 ## Recommended Models
@@ -174,23 +148,38 @@ General:
 video-transcriber doctor
 ```
 
-This verifies:
-- Python version
-- ffmpeg availability
-- yt-dlp (for URL support)
-- CUDA / GPU status
-- faster-whisper installation
-
 ---
 
-## Tips for Best Results
+## Publishing to PyPI (for maintainers)
 
-1. **Long videos** → use `--model medium` or `large-v3` + GPU
-2. **Noisy audio** → keep VAD on (default)
-3. **Precise subtitles** → `--word-timestamps -f srt`
-4. **Batch jobs** → always use `--skip-existing` so you can resume
-5. First run downloads the model (cached in `~/.cache/huggingface/`)
-6. For YouTube: prefer the `[url]` extra so downloads stay efficient (audio-only)
+The project is already prepared for PyPI. To publish:
+
+```bash
+# 1. Install build tools
+pip install build twine
+
+# 2. Build the package
+python -m build
+
+# 3. Check the distribution
+twine check dist/*
+
+# 4. Upload (you need a PyPI account + API token)
+twine upload dist/*
+```
+
+**Recommended workflow:**
+
+1. Create an account on [pypi.org](https://pypi.org)
+2. Generate an API token under Account settings → API tokens
+3. Use the token as password when `twine` asks for credentials (username = `__token__`)
+
+After the first successful upload, users will be able to install with:
+
+```bash
+pip install video-transcriber
+pip install "video-transcriber[url]"   # with YouTube support
+```
 
 ---
 
@@ -203,7 +192,8 @@ src/video_transcriber/
 ├── exporters.py    # TXT / SRT / VTT / JSON writers
 ├── utils.py        # ffmpeg, yt-dlp, file discovery, timestamps
 ├── __init__.py
-└── __main__.py
+├── __main__.py
+└── py.typed
 ```
 
 ---
