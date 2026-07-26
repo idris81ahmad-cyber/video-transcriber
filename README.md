@@ -16,13 +16,16 @@ No cloud. No API keys. Works offline after the first model download.
 - 🎥 **YouTube & URL** support
 - 👥 **Speaker diarization**
 - 🌐 **Web UI** (Gradio)
+- 🐳 **Docker** + standalone **binaries**
 - ⚡ Concurrent batch processing (`--workers`)
 - 📄 Config file for permanent defaults
-- 📝 TXT / SRT / VTT / JSON export
+- 📝 TXT / SRT / VTT / JSON / CSV export
 
 ---
 
 ## Installation
+
+### From source
 
 ```bash
 git clone https://github.com/idris81ahmad-cyber/video-transcriber.git
@@ -37,6 +40,43 @@ pip install -e ".[web]"              # Browser UI
 
 Requires **FFmpeg** in PATH.
 
+### Docker
+
+```bash
+# Build
+docker compose build
+
+# CLI — put media in ./data
+mkdir -p data output
+docker compose run --rm cli /data/interview.mp4 -f srt -o /output
+
+# Web UI
+docker compose up web
+# open http://localhost:7860
+```
+
+Or plain Docker:
+
+```bash
+docker build -t video-transcriber .
+docker run --rm -v "$PWD:/data" video-transcriber /data/video.mp4 -f srt
+```
+
+### Standalone binary
+
+```bash
+# Linux / macOS
+chmod +x scripts/build_binary.sh
+./scripts/build_binary.sh
+./dist/video-transcriber --version
+
+# Windows (PowerShell)
+.\scripts\build_binary.ps1
+.\dist\video-transcriber.exe --version
+```
+
+> The binary still needs **ffmpeg** on the host PATH.
+
 ---
 
 ## Quick Start
@@ -49,31 +89,18 @@ video-transcriber "https://youtu.be/XXXX" --diarize -f srt
 
 # Web UI
 video-transcriber web
-# then open http://127.0.0.1:7860
 ```
 
 ---
 
-## Web UI
+## Commands
 
-```bash
-pip install 'video-transcriber[web]'
-video-transcriber web
-```
-
-Options:
-
-```bash
-video-transcriber web --port 8080
-video-transcriber web --share          # public Gradio link
-video-transcriber web --host 0.0.0.0   # listen on all interfaces
-```
-
-Features:
-- Upload video/audio or paste a YouTube URL
-- Choose model, device, language, formats
-- Optional speaker diarization
-- Download TXT / SRT / VTT / JSON
+| Command | Description |
+|---------|-------------|
+| *(default)* | Transcribe files / folders / URLs |
+| `web` | Launch browser UI |
+| `doctor` | System check |
+| `models` | Model recommendations |
 
 ---
 
@@ -87,17 +114,6 @@ format = "srt"
 workers = 2
 skip_existing = true
 ```
-
----
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| *(default)* | Transcribe files / folders / URLs |
-| `web` | Launch browser UI |
-| `doctor` | System check |
-| `models` | Model recommendations |
 
 ---
 
