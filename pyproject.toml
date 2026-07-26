@@ -84,7 +84,7 @@ include = [
 ]
 
 [tool.hatch.build.targets.wheel]
-only-include = ["src/video_transcriber"]
+packages = ["src/video_transcriber"]
 
 [tool.ruff]
 line-length = 100
