@@ -12,14 +12,13 @@ No cloud. No API keys. Works offline after the first model download.
 
 ## Highlights
 
-- 🎬 Transcribe **video** (MP4, MOV, MKV, WebM…) or **audio** files
-- 🎥 **YouTube & URL support** (via yt-dlp)
-- 👥 **Speaker diarization** (who spoke when)
-- ⚡ Extremely fast (CTranslate2 + optional GPU)
-- 📄 **Config file** support for permanent defaults
-- 📝 Export to **TXT / SRT / VTT / JSON**
-- 📁 Batch folders + skip already done files
-- 🖥️ Beautiful terminal UI (Typer + Rich)
+- 🎬 Transcribe **video** or **audio** files
+- 🎥 **YouTube & URL** support
+- 👥 **Speaker diarization**
+- ⚡ Concurrent batch processing (`--workers`)
+- 📄 Config file for permanent defaults
+- 📝 TXT / SRT / VTT / JSON export
+- 🖥️ Beautiful terminal progress (overall + ETA)
 
 ---
 
@@ -28,70 +27,65 @@ No cloud. No API keys. Works offline after the first model download.
 ```bash
 git clone https://github.com/idris81ahmad-cyber/video-transcriber.git
 cd video-transcriber
-
-python -m venv .venv
-source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate
 
 pip install -e .
-pip install -e ".[url]"            # YouTube support
-pip install -e ".[diarization]"    # Speaker labels
+pip install -e ".[url]"             # YouTube
+pip install -e ".[diarization]"     # Speakers
 ```
 
-Requires **FFmpeg** in your PATH.
+Requires **FFmpeg** in PATH.
 
 ---
 
 ## Quick Start
 
 ```bash
-# Simplest possible usage (default command)
+# Single file (default command)
 video-transcriber interview.mp4
 
-# Explicit command still works
-video-transcriber transcribe interview.mp4
+# Batch folder with 2 workers + SRT
+video-transcriber ./lectures -r -f srt --workers 2
 
-# With speaker diarization + subtitles
-video-transcriber interview.mp4 --diarize -f srt
+# YouTube + diarization
+video-transcriber "https://youtu.be/XXXX" --diarize -f srt
 
-# YouTube
-video-transcriber "https://youtu.be/XXXX" -m medium -f srt
-
-# Whole folder
-video-transcriber ./recordings -r -f srt --skip-existing
+# High quality
+video-transcriber meeting.mp4 -m medium -d cuda -f srt,json
 ```
+
+---
+
+## Concurrent Batch Processing
+
+```bash
+# Process many files in parallel
+video-transcriber ./recordings -r -f srt --workers 4 --skip-existing
+```
+
+- `--workers 1` (default) — sequential, safest for GPU
+- `--workers N` — parallel workers with a shared model lock
+- Progress bar shows overall completion + ETA
 
 ---
 
 ## Config File
 
-Create a config file so you don't have to repeat flags every time.
-
-**Locations** (first found wins):
-
-1. `./video-transcriber.toml` (project local)
-2. `~/.config/video-transcriber/config.toml`
-3. `~/.video-transcriber.toml`
-
-**Example** `~/.config/video-transcriber/config.toml`:
-
 ```toml
+# ~/.config/video-transcriber/config.toml
 model = "medium"
 device = "cuda"
 format = "srt"
-diarize = true
+workers = 2
 skip_existing = true
-language = "en"
+diarize = false
 ```
 
-After that you can simply run:
+Then just run:
 
 ```bash
 video-transcriber meeting.mp4
 ```
-
-and it will use `medium` + CUDA + SRT + diarization automatically.
-
-CLI flags always override the config file.
 
 ---
 
@@ -99,21 +93,8 @@ CLI flags always override the config file.
 
 ```bash
 pip install 'video-transcriber[diarization]'
-
-# Accept model conditions + set token
-# https://huggingface.co/pyannote/speaker-diarization-3.1
-export HF_TOKEN=hf_xxxxxxxx
-
+export HF_TOKEN=hf_xxxxxxxx   # after accepting model conditions
 video-transcriber meeting.mp4 --diarize -f srt
-```
-
----
-
-## YouTube / URL Support
-
-```bash
-pip install 'video-transcriber[url]'
-video-transcriber "https://www.youtube.com/watch?v=XXXX" -f srt
 ```
 
 ---
@@ -122,10 +103,10 @@ video-transcriber "https://www.youtube.com/watch?v=XXXX" -f srt
 
 | Command | Description |
 |---------|-------------|
-| *(default)* / `transcribe` | Transcribe files / folders / URLs |
-| `doctor` | Check system dependencies |
-| `models` | Show model recommendations |
-| `--version` | Show version |
+| *(default)* | Transcribe files / folders / URLs |
+| `doctor` | System check |
+| `models` | Model recommendations |
+| `--version` | Version |
 
 ---
 
