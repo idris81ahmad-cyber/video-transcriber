@@ -29,6 +29,7 @@ from rich.table import Table
 from video_transcriber import __version__
 from video_transcriber.config import load_config
 from video_transcriber.core import load_model, save_result, transcribe_file
+from video_transcriber.exporters import SUPPORTED_FORMATS
 from video_transcriber.utils import (
     MEDIA_EXTS,
     check_ffmpeg,
@@ -36,6 +37,7 @@ from video_transcriber.utils import (
     discover_media,
     download_from_url,
     is_url,
+    sanitize_filename,
 )
 
 _CFG = load_config()
@@ -67,7 +69,12 @@ def version_callback(value: bool) -> None:
 @app.callback()
 def main(
     version: Optional[bool] = typer.Option(
-        None, "--version", "-V", callback=version_callback, is_eager=True, help="Show version and exit."
+        None,
+        "--version",
+        "-V",
+        callback=version_callback,
+        is_eager=True,
+        help="Show version and exit.",
     ),
 ) -> None:
     """Video Transcriber — local speech-to-text for video & audio."""
@@ -77,34 +84,91 @@ def main(
 def _resolve_out_base(job: Job, output: Optional[Path], total_jobs: int) -> Path:
     if output is None:
         if job.is_temp:
-            safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in job.display_name)
-            safe_name = safe_name.strip()[:80] or "transcript"
-            return Path.cwd() / safe_name
+            return Path.cwd() / sanitize_filename(job.display_name)
         return job.path.with_suffix("")
     if output.is_dir() or (total_jobs > 1 and not output.suffix):
         output.mkdir(parents=True, exist_ok=True)
-        name = job.path.stem if not job.is_temp else job.display_name[:60]
+        name = (
+            job.path.stem if not job.is_temp else sanitize_filename(job.display_name, max_length=60)
+        )
         return output / name
+    output.parent.mkdir(parents=True, exist_ok=True)
     return output.with_suffix("")
 
 
 @app.command("transcribe")
 def transcribe(
     inputs: List[str] = typer.Argument(..., help="Media files, folders, or YouTube/URL links."),
-    model: str = typer.Option(_CFG["model"], "--model", "-m", help="Whisper model size", rich_help_panel="Model"),
-    device: str = typer.Option(_CFG["device"], "--device", "-d", help="cpu or cuda", rich_help_panel="Model"),
-    compute_type: Optional[str] = typer.Option(_CFG["compute_type"], "--compute-type", help="Quantization type", rich_help_panel="Model"),
-    language: Optional[str] = typer.Option(_CFG["language"], "--language", "-l", help="Language code", rich_help_panel="Transcription"),
-    formats: str = typer.Option(_CFG["format"], "--format", "-f", help="txt,srt,vtt,json (comma-separated)", rich_help_panel="Output"),
-    output: Optional[Path] = typer.Option(Path(_CFG["output"]) if _CFG["output"] else None, "--output", "-o", help="Output file or directory", rich_help_panel="Output"),
-    word_timestamps: bool = typer.Option(_CFG["word_timestamps"], "--word-timestamps", help="Word-level timestamps", rich_help_panel="Transcription"),
-    beam_size: int = typer.Option(_CFG["beam_size"], "--beam-size", help="Beam size", rich_help_panel="Transcription"),
-    vad_filter: bool = typer.Option(_CFG["vad"], "--vad/--no-vad", help="Voice activity detection", rich_help_panel="Transcription"),
-    diarize: bool = typer.Option(_CFG["diarize"], "--diarize/--no-diarize", help="Speaker diarization", rich_help_panel="Transcription"),
-    recursive: bool = typer.Option(_CFG["recursive"], "--recursive", "-r", help="Search folders recursively", rich_help_panel="Input"),
-    skip_existing: bool = typer.Option(_CFG["skip_existing"], "--skip-existing/--no-skip-existing", help="Skip existing transcripts", rich_help_panel="Output"),
-    workers: int = typer.Option(1, "--workers", "-w", help="Number of parallel workers (1 = sequential)", rich_help_panel="Performance"),
-    quiet: bool = typer.Option(_CFG["quiet"], "--quiet", "-q", help="Reduce output", rich_help_panel="General"),
+    model: str = typer.Option(
+        _CFG["model"], "--model", "-m", help="Whisper model size", rich_help_panel="Model"
+    ),
+    device: str = typer.Option(
+        _CFG["device"], "--device", "-d", help="cpu or cuda", rich_help_panel="Model"
+    ),
+    compute_type: Optional[str] = typer.Option(
+        _CFG["compute_type"], "--compute-type", help="Quantization type", rich_help_panel="Model"
+    ),
+    language: Optional[str] = typer.Option(
+        _CFG["language"], "--language", "-l", help="Language code", rich_help_panel="Transcription"
+    ),
+    formats: str = typer.Option(
+        _CFG["format"],
+        "--format",
+        "-f",
+        help="txt,srt,vtt,json,csv (comma-separated)",
+        rich_help_panel="Output",
+    ),
+    output: Optional[Path] = typer.Option(
+        Path(_CFG["output"]) if _CFG["output"] else None,
+        "--output",
+        "-o",
+        help="Output file or directory",
+        rich_help_panel="Output",
+    ),
+    word_timestamps: bool = typer.Option(
+        _CFG["word_timestamps"],
+        "--word-timestamps",
+        help="Word-level timestamps",
+        rich_help_panel="Transcription",
+    ),
+    beam_size: int = typer.Option(
+        _CFG["beam_size"], "--beam-size", help="Beam size", rich_help_panel="Transcription"
+    ),
+    vad_filter: bool = typer.Option(
+        _CFG["vad"],
+        "--vad/--no-vad",
+        help="Voice activity detection",
+        rich_help_panel="Transcription",
+    ),
+    diarize: bool = typer.Option(
+        _CFG["diarize"],
+        "--diarize/--no-diarize",
+        help="Speaker diarization",
+        rich_help_panel="Transcription",
+    ),
+    recursive: bool = typer.Option(
+        _CFG["recursive"],
+        "--recursive",
+        "-r",
+        help="Search folders recursively",
+        rich_help_panel="Input",
+    ),
+    skip_existing: bool = typer.Option(
+        _CFG["skip_existing"],
+        "--skip-existing/--no-skip-existing",
+        help="Skip existing transcripts",
+        rich_help_panel="Output",
+    ),
+    workers: int = typer.Option(
+        1,
+        "--workers",
+        "-w",
+        help="Number of parallel workers (1 = sequential)",
+        rich_help_panel="Performance",
+    ),
+    quiet: bool = typer.Option(
+        _CFG["quiet"], "--quiet", "-q", help="Reduce output", rich_help_panel="General"
+    ),
 ) -> None:
     """
     Transcribe video/audio files, folders, or YouTube/URLs.
@@ -116,10 +180,13 @@ def transcribe(
       video-transcriber meeting.mp4 --diarize -f srt
     """
     fmt_list = [f.strip().lower() for f in formats.split(",") if f.strip()]
-    valid_fmts = {"txt", "srt", "vtt", "json"}
+    valid_fmts = set(SUPPORTED_FORMATS)
     for f in fmt_list:
         if f not in valid_fmts:
-            console.print(f"[red]Error:[/] Unsupported format '{f}'")
+            console.print(
+                f"[red]Error:[/] Unsupported format '{f}'. "
+                f"Choose from: {', '.join(sorted(valid_fmts))}"
+            )
             raise typer.Exit(1)
 
     if workers < 1:
@@ -127,18 +194,28 @@ def transcribe(
         raise typer.Exit(1)
 
     if not check_ffmpeg():
-        console.print(Panel("[red]ffmpeg not found[/] — install it and add to PATH", title="Missing Dependency", border_style="red"))
+        console.print(
+            Panel(
+                "[red]ffmpeg not found[/] — install it and add to PATH",
+                title="Missing Dependency",
+                border_style="red",
+            )
+        )
         raise typer.Exit(1)
 
     if diarize:
         from video_transcriber.diarize import check_diarization_available
+
         if not check_diarization_available():
-            console.print(Panel(
-                "[red]Speaker diarization requires the optional extra[/]\n\n"
-                "  [cyan]pip install 'video-transcriber[diarization]'[/]\n"
-                "  Accept model conditions + set HF_TOKEN",
-                title="Missing Dependency", border_style="red",
-            ))
+            console.print(
+                Panel(
+                    "[red]Speaker diarization requires the optional extra[/]\n\n"
+                    "  [cyan]pip install 'video-transcriber[diarization]'[/]\n"
+                    "  Accept model conditions + set HF_TOKEN",
+                    title="Missing Dependency",
+                    border_style="red",
+                )
+            )
             raise typer.Exit(1)
 
     jobs: List[Job] = []
@@ -147,7 +224,13 @@ def transcribe(
     for item in inputs:
         if is_url(item):
             if not check_ytdlp():
-                console.print(Panel("[red]yt-dlp required[/] — pip install 'video-transcriber[url]'", title="Missing Dependency", border_style="red"))
+                console.print(
+                    Panel(
+                        "[red]yt-dlp required[/] — pip install 'video-transcriber[url]'",
+                        title="Missing Dependency",
+                        border_style="red",
+                    )
+                )
                 raise typer.Exit(1)
             if not quiet:
                 console.print(f"[cyan]Downloading[/] {item}")
@@ -186,18 +269,22 @@ def transcribe(
     if not quiet:
         extra = " • [magenta]diarization[/]" if diarize else ""
         worker_info = f" • [blue]{workers} worker(s)[/]" if workers > 1 else ""
-        console.print(Panel(
-            f"[bold]{len(jobs)}[/] item(s) queued\n"
-            f"Model: [cyan]{model}[/] • Device: [green]{device}[/]\n"
-            f"Formats: [yellow]{', '.join(fmt_list)}[/]{extra}{worker_info}",
-            title="Video Transcriber", border_style="cyan",
-        ))
+        console.print(
+            Panel(
+                f"[bold]{len(jobs)}[/] item(s) queued\n"
+                f"Model: [cyan]{model}[/] • Device: [green]{device}[/]\n"
+                f"Formats: [yellow]{', '.join(fmt_list)}[/]{extra}{worker_info}",
+                title="Video Transcriber",
+                border_style="cyan",
+            )
+        )
 
     model_obj = load_model(model, device=device, compute_type=compute_type, quiet=quiet)
 
     diarization_pipeline = None
     if diarize:
         from video_transcriber.diarize import load_diarization_pipeline
+
         diarization_pipeline = load_diarization_pipeline(device=device)
 
     model_lock = threading.Lock()
@@ -324,12 +411,14 @@ def web(
     try:
         from video_transcriber.web import launch
     except Exception as e:
-        console.print(Panel(
-            f"[red]Web UI failed to load[/]\n\n{e}\n\n"
-            "Install with:\n  [cyan]pip install 'video-transcriber[web]'[/]",
-            title="Missing Dependency",
-            border_style="red",
-        ))
+        console.print(
+            Panel(
+                f"[red]Web UI failed to load[/]\n\n{e}\n\n"
+                "Install with:\n  [cyan]pip install 'video-transcriber[web]'[/]",
+                title="Missing Dependency",
+                border_style="red",
+            )
+        )
         raise typer.Exit(1)
 
     launch(host=host, port=port, share=share)
@@ -357,6 +446,7 @@ def doctor() -> None:
 
     try:
         from video_transcriber.diarize import check_diarization_available
+
         if check_diarization_available():
             table.add_row("pyannote.audio", "[green]✓[/]", "diarization ready")
         else:
@@ -366,12 +456,14 @@ def doctor() -> None:
 
     try:
         import gradio
+
         table.add_row("gradio", "[green]✓[/]", getattr(gradio, "__version__", "installed"))
     except ImportError:
         table.add_row("gradio", "[yellow]—[/]", "optional (web UI)")
 
     try:
         import torch
+
         if torch.cuda.is_available():
             table.add_row("CUDA", "[green]✓[/]", torch.cuda.get_device_name(0))
         else:
@@ -381,6 +473,7 @@ def doctor() -> None:
 
     try:
         import faster_whisper
+
         table.add_row("faster-whisper", "[green]✓[/]", faster_whisper.__version__)
     except Exception as e:
         table.add_row("faster-whisper", "[red]✗[/]", str(e))

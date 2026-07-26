@@ -65,7 +65,9 @@ def _transcribe_ui(
             if not is_url(url):
                 return "Invalid URL.", None, None, None, None
             try:
-                media_path, display_name = download_from_url(url, output_dir=tmp_dir, audio_only=True)
+                media_path, display_name = download_from_url(
+                    url, output_dir=tmp_dir, audio_only=True
+                )
             except Exception as e:
                 return f"Download failed: {e}", None, None, None, None
 
@@ -78,13 +80,19 @@ def _transcribe_ui(
 
         diarization_pipeline = None
         if diarize:
-            from video_transcriber.diarize import check_diarization_available, load_diarization_pipeline
+            from video_transcriber.diarize import (
+                check_diarization_available,
+                load_diarization_pipeline,
+            )
 
             if not check_diarization_available():
                 return (
                     "Diarization requires: pip install 'video-transcriber[diarization]' "
                     "and a valid HF_TOKEN.",
-                    None, None, None, None,
+                    None,
+                    None,
+                    None,
+                    None,
                 )
             diarization_pipeline = load_diarization_pipeline(device=device)
 
@@ -147,7 +155,17 @@ def build_ui():
             with gr.Column(scale=1):
                 file_input = gr.File(
                     label="Upload video / audio",
-                    file_types=[".mp4", ".mov", ".mkv", ".webm", ".mp3", ".wav", ".m4a", ".flac", ".ogg"],
+                    file_types=[
+                        ".mp4",
+                        ".mov",
+                        ".mkv",
+                        ".webm",
+                        ".mp3",
+                        ".wav",
+                        ".m4a",
+                        ".flac",
+                        ".ogg",
+                    ],
                 )
                 url_input = gr.Textbox(
                     label="Or paste a URL (YouTube, etc.)",

@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, List, Optional
 
-from faster_whisper import WhisperModel
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -40,8 +39,11 @@ def load_model(
     download_root: Optional[str] = None,
     *,
     quiet: bool = False,
-) -> WhisperModel:
+) -> Any:
     """Load a Faster-Whisper model with sensible defaults."""
+    # Lazy import so --version / doctor / unit tests work before native DLLs load.
+    from faster_whisper import WhisperModel
+
     if compute_type is None:
         compute_type = "float16" if device == "cuda" else "int8"
 
@@ -60,7 +62,7 @@ def load_model(
 
 
 def transcribe_file(
-    model: WhisperModel,
+    model: Any,
     media_path: Path,
     *,
     language: Optional[str] = None,

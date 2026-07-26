@@ -21,6 +21,7 @@ class SpeakerSegment:
 def check_diarization_available() -> bool:
     try:
         import pyannote.audio  # noqa: F401
+
         return True
     except ImportError:
         return False

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 from typing import Any, Iterable, List, Optional
 
 from video_transcriber.utils import format_timestamp
+
+SUPPORTED_FORMATS = frozenset({"txt", "srt", "vtt", "json", "csv"})
 
 
 def _speaker_prefix(segment: Any) -> str:
@@ -17,6 +20,7 @@ def _speaker_prefix(segment: Any) -> str:
 
 
 def write_txt(segments: Iterable[Any], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
         for segment in segments:
             text = segment.text.strip()
@@ -25,6 +29,7 @@ def write_txt(segments: Iterable[Any], path: Path) -> None:
 
 
 def write_srt(segments: Iterable[Any], path: Path, *, word_level: bool = False) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
         index = 1
         for segment in segments:
@@ -51,6 +56,7 @@ def write_srt(segments: Iterable[Any], path: Path, *, word_level: bool = False) 
 
 
 def write_vtt(segments: Iterable[Any], path: Path, *, word_level: bool = False) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
         f.write("WEBVTT\n\n")
         for segment in segments:
@@ -81,6 +87,7 @@ def write_json(
     duration: Optional[float] = None,
     word_level: bool = False,
 ) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     data: dict[str, Any] = {
         "language": language,
         "language_probability": language_probability,
@@ -116,6 +123,41 @@ def write_json(
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def write_csv(segments: Iterable[Any], path: Path, *, word_level: bool = False) -> None:
+    """Write segments (or words) as CSV for spreadsheets / editing."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f)
+        if word_level:
+            writer.writerow(["index", "start", "end", "speaker", "word", "probability"])
+            index = 0
+            for segment in segments:
+                speaker = getattr(segment, "speaker", "") or ""
+                words = getattr(segment, "words", None) or []
+                for word in words:
+                    if word.start is None or word.end is None:
+                        continue
+                    writer.writerow(
+                        [
+                            index,
+                            f"{word.start:.3f}",
+                            f"{word.end:.3f}",
+                            speaker,
+                            word.word.strip(),
+                            getattr(word, "probability", ""),
+                        ]
+                    )
+                    index += 1
+        else:
+            writer.writerow(["index", "start", "end", "speaker", "text"])
+            for i, segment in enumerate(segments):
+                text = segment.text.strip()
+                if not text:
+                    continue
+                speaker = getattr(segment, "speaker", "") or ""
+                writer.writerow([i, f"{segment.start:.3f}", f"{segment.end:.3f}", speaker, text])
+
+
 def export(
     segments: List[Any],
     path: Path,
@@ -143,5 +185,9 @@ def export(
             duration=duration,
             word_level=word_level,
         )
+    elif fmt == "csv":
+        write_csv(segments, path, word_level=word_level)
     else:
-        raise ValueError(f"Unsupported format: {fmt}")
+        raise ValueError(
+            f"Unsupported format: {fmt}. Choose from: {', '.join(sorted(SUPPORTED_FORMATS))}"
+        )

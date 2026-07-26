@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "video-transcriber"
-version = "1.4.0"
+version = "1.4.1"
 description = "Fast, accurate, fully local video & audio transcription powered by Faster-Whisper"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -72,6 +72,8 @@ dev = [
     "mypy>=1.8.0",
     "build>=1.0.0",
     "twine>=5.0.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
 ]
 
 [project.scripts]
@@ -87,6 +89,7 @@ Changelog = "https://github.com/idris81ahmad-cyber/video-transcriber/blob/main/C
 [tool.hatch.build.targets.sdist]
 include = [
     "src/video_transcriber",
+    "tests",
     "README.md",
     "LICENSE",
     "CHANGELOG.md",
@@ -108,3 +111,8 @@ python_version = "3.9"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"

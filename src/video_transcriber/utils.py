@@ -26,6 +26,7 @@ def check_ytdlp() -> bool:
     """Return True if yt-dlp is importable."""
     try:
         import yt_dlp  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -44,11 +45,15 @@ def extract_audio(video_path: Path, output_path: Optional[Path] = None) -> Path:
     cmd = [
         "ffmpeg",
         "-y",
-        "-i", str(video_path),
+        "-i",
+        str(video_path),
         "-vn",
-        "-acodec", "pcm_s16le",
-        "-ar", "16000",
-        "-ac", "1",
+        "-acodec",
+        "pcm_s16le",
+        "-ar",
+        "16000",
+        "-ac",
+        "1",
         str(output_path),
     ]
 
@@ -114,7 +119,7 @@ def download_from_url(
         "outtmpl": outtmpl,
         "quiet": True,
         "no_warnings": True,
-        "noplaylist": True,          # single video only
+        "noplaylist": True,  # single video only
         "extract_flat": False,
         # Post-process to a consistent format when possible
         "postprocessors": [
@@ -123,7 +128,9 @@ def download_from_url(
                 "preferredcodec": "wav",
                 "preferredquality": "0",
             }
-        ] if audio_only else [],
+        ]
+        if audio_only
+        else [],
     }
 
     # If we only want audio we force wav for Whisper friendliness
@@ -171,9 +178,15 @@ def download_from_url(
         raise RuntimeError(f"Failed to download from URL:\n{e}") from e
 
 
-def format_timestamp(seconds: float, *, always_include_hours: bool = True, decimal_marker: str = ",") -> str:
+def format_timestamp(
+    seconds: float,
+    *,
+    always_include_hours: bool = True,
+    decimal_marker: str = ",",
+) -> str:
     """Format seconds into HH:MM:SS,mmm or MM:SS,mmm."""
-    assert seconds >= 0, "non-negative timestamp expected"
+    if seconds < 0:
+        raise ValueError("non-negative timestamp expected")
     milliseconds = round(seconds * 1000.0)
 
     hours = milliseconds // 3_600_000
@@ -206,4 +219,25 @@ def discover_media(path: Path, recursive: bool = False) -> List[Path]:
 
 
 def is_url(value: str) -> bool:
-    return value.startswith(("http://", "https://", "www."))
+    """Return True if value looks like an http(s) media URL."""
+    candidate = value.strip()
+    if not candidate:
+        return False
+    if candidate.startswith("www."):
+        candidate = "https://" + candidate
+    from urllib.parse import urlparse
+
+    parsed = urlparse(candidate)
+    if parsed.scheme not in {"http", "https"}:
+        return False
+    return bool(parsed.netloc and "." in parsed.netloc)
+
+
+def sanitize_filename(name: str, *, max_length: int = 80) -> str:
+    """Make a string safe for use as a filename stem."""
+    import re
+
+    cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" .")
+    cleaned = cleaned[:max_length].rstrip(" .")
+    return cleaned or "transcript"

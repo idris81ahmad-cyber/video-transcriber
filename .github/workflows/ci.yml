@@ -28,8 +28,13 @@ jobs:
 
       - name: Lint with ruff
         run: |
-          ruff check src/
-          ruff format --check src/
+          ruff check src/ --select E,F
+          ruff check tests/
+          ruff format --check tests/
+
+      - name: Run unit tests
+        run: |
+          pytest --cov=video_transcriber --cov-report=term-missing
 
       - name: Verify CLI entry points
         run: |
