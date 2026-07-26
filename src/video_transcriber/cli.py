@@ -127,7 +127,7 @@ def transcribe(
         raise typer.Exit(1)
 
     if not check_ffmpeg():
-        console.print(Panel("[red]ffmpeg not found[/] \u2014 install it and add to PATH", title="Missing Dependency", border_style="red"))
+        console.print(Panel("[red]ffmpeg not found[/] — install it and add to PATH", title="Missing Dependency", border_style="red"))
         raise typer.Exit(1)
 
     if diarize:
@@ -141,16 +141,13 @@ def transcribe(
             ))
             raise typer.Exit(1)
 
-    # ------------------------------------------------------------------
-    # Collect jobs
-    # ------------------------------------------------------------------
     jobs: List[Job] = []
     temp_dirs: List[Path] = []
 
     for item in inputs:
         if is_url(item):
             if not check_ytdlp():
-                console.print(Panel("[red]yt-dlp required[/] \u2014 pip install 'video-transcriber[url]'", title="Missing Dependency", border_style="red"))
+                console.print(Panel("[red]yt-dlp required[/] — pip install 'video-transcriber[url]'", title="Missing Dependency", border_style="red"))
                 raise typer.Exit(1)
             if not quiet:
                 console.print(f"[cyan]Downloading[/] {item}")
@@ -160,7 +157,7 @@ def transcribe(
                 path, title = download_from_url(item, output_dir=tmp_dir, audio_only=True)
                 jobs.append(Job(path=path, display_name=title, is_temp=True, original_url=item))
             except Exception as e:
-                console.print(f"[red]\u2717 Download failed:[/] {item}\n   {e}")
+                console.print(f"[red]✗ Download failed:[/] {item}\n   {e}")
                 continue
         else:
             p = Path(item)
@@ -178,7 +175,6 @@ def transcribe(
         console.print("[yellow]No media to process.[/]")
         raise typer.Exit(0)
 
-    # Deduplicate
     seen = set()
     unique: List[Job] = []
     for j in jobs:
@@ -188,11 +184,11 @@ def transcribe(
     jobs = unique
 
     if not quiet:
-        extra = " \u2022 [magenta]diarization[/]" if diarize else ""
-        worker_info = f" \u2022 [blue]{workers} worker(s)[/]" if workers > 1 else ""
+        extra = " • [magenta]diarization[/]" if diarize else ""
+        worker_info = f" • [blue]{workers} worker(s)[/]" if workers > 1 else ""
         console.print(Panel(
             f"[bold]{len(jobs)}[/] item(s) queued\n"
-            f"Model: [cyan]{model}[/] \u2022 Device: [green]{device}[/]\n"
+            f"Model: [cyan]{model}[/] • Device: [green]{device}[/]\n"
             f"Formats: [yellow]{', '.join(fmt_list)}[/]{extra}{worker_info}",
             title="Video Transcriber", border_style="cyan",
         ))
@@ -204,17 +200,15 @@ def transcribe(
         from video_transcriber.diarize import load_diarization_pipeline
         diarization_pipeline = load_diarization_pipeline(device=device)
 
-    # Shared lock so only one thread talks to the model at a time (safer on GPU)
     model_lock = threading.Lock()
 
     def process_one(job: Job) -> Tuple[bool, str, List[Path]]:
-        """Returns (success, message, written_paths)."""
         out_base = _resolve_out_base(job, output, len(jobs))
 
         if skip_existing:
             existing = all((out_base.with_suffix(f".{fmt}")).exists() for fmt in fmt_list)
             if existing:
-                return True, f"skipped (exists) \u2192 {out_base}", []
+                return True, f"skipped (exists) → {out_base}", []
 
         try:
             with model_lock:
@@ -228,13 +222,13 @@ def transcribe(
                     diarize=diarize,
                     diarization_pipeline=diarization_pipeline,
                     device=device,
-                    quiet=True,  # suppress per-file chatter in batch mode
+                    quiet=True,
                 )
 
             written = save_result(result, out_base, fmt_list, word_level=word_timestamps)
             msg = (
-                f"{result.language} ({result.language_probability:.0%}) \u2022 "
-                f"{result.duration:.1f}s \u2192 {', '.join(str(p.name) for p in written)}"
+                f"{result.language} ({result.language_probability:.0%}) • "
+                f"{result.duration:.1f}s → {', '.join(str(p.name) for p in written)}"
             )
             return True, msg, written
         except Exception as e:
@@ -245,7 +239,6 @@ def transcribe(
 
     try:
         if workers == 1 or len(jobs) == 1:
-            # ---------- Sequential with rich overall progress ----------
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[bold blue]{task.description}"),
@@ -264,13 +257,12 @@ def transcribe(
                     if ok:
                         success += 1
                         if not quiet:
-                            console.print(f"  [green]\u2713[/] {job.display_name} \u2014 {msg}")
+                            console.print(f"  [green]✓[/] {job.display_name} — {msg}")
                     else:
                         failures.append((job.display_name, msg))
-                        console.print(f"  [red]\u2717[/] {job.display_name} \u2014 {msg}")
+                        console.print(f"  [red]✗[/] {job.display_name} — {msg}")
                     progress.advance(task_id)
         else:
-            # ---------- Concurrent workers ----------
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[bold blue]{task.description}"),
@@ -295,10 +287,10 @@ def transcribe(
                         if ok:
                             success += 1
                             if not quiet:
-                                console.print(f"  [green]\u2713[/] {job.display_name} \u2014 {msg}")
+                                console.print(f"  [green]✓[/] {job.display_name} — {msg}")
                         else:
                             failures.append((job.display_name, msg))
-                            console.print(f"  [red]\u2717[/] {job.display_name} \u2014 {msg}")
+                            console.print(f"  [red]✗[/] {job.display_name} — {msg}")
                         progress.advance(task_id)
 
     finally:
@@ -315,7 +307,32 @@ def transcribe(
         else:
             console.print(f"[bold yellow]Finished with issues.[/] {success}/{len(jobs)} succeeded.")
             for name, err in failures:
-                console.print(f"  [red]\u2022[/] {name}: {err}")
+                console.print(f"  [red]•[/] {name}: {err}")
+
+
+@app.command("web")
+def web(
+    host: str = typer.Option("127.0.0.1", "--host", help="Host to bind"),
+    port: int = typer.Option(7860, "--port", "-p", help="Port"),
+    share: bool = typer.Option(False, "--share", help="Create a public Gradio link"),
+) -> None:
+    """
+    Launch the browser-based Web UI.
+
+    Requires: pip install 'video-transcriber[web]'
+    """
+    try:
+        from video_transcriber.web import launch
+    except Exception as e:
+        console.print(Panel(
+            f"[red]Web UI failed to load[/]\n\n{e}\n\n"
+            "Install with:\n  [cyan]pip install 'video-transcriber[web]'[/]",
+            title="Missing Dependency",
+            border_style="red",
+        ))
+        raise typer.Exit(1)
+
+    launch(host=host, port=port, share=share)
 
 
 @app.command("doctor")
@@ -326,41 +343,47 @@ def doctor() -> None:
     table.add_column("Status")
     table.add_column("Details")
 
-    table.add_row("Python", "[green]\u2713[/]", f"{sys.version.split()[0]}")
+    table.add_row("Python", "[green]✓[/]", f"{sys.version.split()[0]}")
 
     if check_ffmpeg():
-        table.add_row("ffmpeg", "[green]\u2713[/]", "Found in PATH")
+        table.add_row("ffmpeg", "[green]✓[/]", "Found in PATH")
     else:
-        table.add_row("ffmpeg", "[red]\u2717[/]", "Not found")
+        table.add_row("ffmpeg", "[red]✗[/]", "Not found")
 
     if check_ytdlp():
-        table.add_row("yt-dlp", "[green]\u2713[/]", "installed")
+        table.add_row("yt-dlp", "[green]✓[/]", "installed")
     else:
-        table.add_row("yt-dlp", "[yellow]\u2014[/]", "optional (YouTube/URLs)")
+        table.add_row("yt-dlp", "[yellow]—[/]", "optional (YouTube/URLs)")
 
     try:
         from video_transcriber.diarize import check_diarization_available
         if check_diarization_available():
-            table.add_row("pyannote.audio", "[green]\u2713[/]", "diarization ready")
+            table.add_row("pyannote.audio", "[green]✓[/]", "diarization ready")
         else:
-            table.add_row("pyannote.audio", "[yellow]\u2014[/]", "optional (--diarize)")
+            table.add_row("pyannote.audio", "[yellow]—[/]", "optional (--diarize)")
     except Exception:
-        table.add_row("pyannote.audio", "[yellow]\u2014[/]", "optional (--diarize)")
+        table.add_row("pyannote.audio", "[yellow]—[/]", "optional (--diarize)")
+
+    try:
+        import gradio
+        table.add_row("gradio", "[green]✓[/]", getattr(gradio, "__version__", "installed"))
+    except ImportError:
+        table.add_row("gradio", "[yellow]—[/]", "optional (web UI)")
 
     try:
         import torch
         if torch.cuda.is_available():
-            table.add_row("CUDA", "[green]\u2713[/]", torch.cuda.get_device_name(0))
+            table.add_row("CUDA", "[green]✓[/]", torch.cuda.get_device_name(0))
         else:
-            table.add_row("CUDA", "[yellow]\u2014[/]", "CPU only")
+            table.add_row("CUDA", "[yellow]—[/]", "CPU only")
     except ImportError:
-        table.add_row("CUDA", "[dim]\u2014[/]", "torch not installed")
+        table.add_row("CUDA", "[dim]—[/]", "torch not installed")
 
     try:
         import faster_whisper
-        table.add_row("faster-whisper", "[green]\u2713[/]", faster_whisper.__version__)
+        table.add_row("faster-whisper", "[green]✓[/]", faster_whisper.__version__)
     except Exception as e:
-        table.add_row("faster-whisper", "[red]\u2717[/]", str(e))
+        table.add_row("faster-whisper", "[red]✗[/]", str(e))
 
     console.print(table)
 
@@ -388,8 +411,8 @@ def models() -> None:
 
 
 def run() -> None:
-    """Entry point \u2014 makes transcribe the default command."""
-    known = {"transcribe", "doctor", "models"}
+    """Entry point — makes transcribe the default command."""
+    known = {"transcribe", "doctor", "models", "web"}
     if len(sys.argv) > 1 and sys.argv[1] not in known and not sys.argv[1].startswith("-"):
         sys.argv.insert(1, "transcribe")
     app()
