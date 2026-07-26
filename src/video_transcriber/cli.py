@@ -160,7 +160,7 @@ def transcribe(
         rich_help_panel="Output",
     ),
     workers: int = typer.Option(
-        1,
+        int(_CFG.get("workers", 1)),
         "--workers",
         "-w",
         help="Number of parallel workers (1 = sequential)",
@@ -196,7 +196,7 @@ def transcribe(
     if not check_ffmpeg():
         console.print(
             Panel(
-                "[red]ffmpeg not found[/] — install it and add to PATH",
+                "[red]ffmpeg not found[/] \u2014 install it and add to PATH",
                 title="Missing Dependency",
                 border_style="red",
             )
@@ -226,7 +226,7 @@ def transcribe(
             if not check_ytdlp():
                 console.print(
                     Panel(
-                        "[red]yt-dlp required[/] — pip install 'video-transcriber[url]'",
+                        "[red]yt-dlp required[/] \u2014 pip install 'video-transcriber[url]'",
                         title="Missing Dependency",
                         border_style="red",
                     )
@@ -240,7 +240,7 @@ def transcribe(
                 path, title = download_from_url(item, output_dir=tmp_dir, audio_only=True)
                 jobs.append(Job(path=path, display_name=title, is_temp=True, original_url=item))
             except Exception as e:
-                console.print(f"[red]✗ Download failed:[/] {item}\n   {e}")
+                console.print(f"[red]\u2717 Download failed:[/] {item}\n   {e}")
                 continue
         else:
             p = Path(item)
@@ -267,12 +267,12 @@ def transcribe(
     jobs = unique
 
     if not quiet:
-        extra = " • [magenta]diarization[/]" if diarize else ""
-        worker_info = f" • [blue]{workers} worker(s)[/]" if workers > 1 else ""
+        extra = " \u2022 [magenta]diarization[/]" if diarize else ""
+        worker_info = f" \u2022 [blue]{workers} worker(s)[/]" if workers > 1 else ""
         console.print(
             Panel(
                 f"[bold]{len(jobs)}[/] item(s) queued\n"
-                f"Model: [cyan]{model}[/] • Device: [green]{device}[/]\n"
+                f"Model: [cyan]{model}[/] \u2022 Device: [green]{device}[/]\n"
                 f"Formats: [yellow]{', '.join(fmt_list)}[/]{extra}{worker_info}",
                 title="Video Transcriber",
                 border_style="cyan",
@@ -295,7 +295,7 @@ def transcribe(
         if skip_existing:
             existing = all((out_base.with_suffix(f".{fmt}")).exists() for fmt in fmt_list)
             if existing:
-                return True, f"skipped (exists) → {out_base}", []
+                return True, f"skipped (exists) \u2192 {out_base}", []
 
         try:
             with model_lock:
@@ -314,8 +314,8 @@ def transcribe(
 
             written = save_result(result, out_base, fmt_list, word_level=word_timestamps)
             msg = (
-                f"{result.language} ({result.language_probability:.0%}) • "
-                f"{result.duration:.1f}s → {', '.join(str(p.name) for p in written)}"
+                f"{result.language} ({result.language_probability:.0%}) \u2022 "
+                f"{result.duration:.1f}s \u2192 {', '.join(str(p.name) for p in written)}"
             )
             return True, msg, written
         except Exception as e:
@@ -344,10 +344,10 @@ def transcribe(
                     if ok:
                         success += 1
                         if not quiet:
-                            console.print(f"  [green]✓[/] {job.display_name} — {msg}")
+                            console.print(f"  [green]\u2713[/] {job.display_name} \u2014 {msg}")
                     else:
                         failures.append((job.display_name, msg))
-                        console.print(f"  [red]✗[/] {job.display_name} — {msg}")
+                        console.print(f"  [red]\u2717[/] {job.display_name} \u2014 {msg}")
                     progress.advance(task_id)
         else:
             with Progress(
@@ -374,10 +374,10 @@ def transcribe(
                         if ok:
                             success += 1
                             if not quiet:
-                                console.print(f"  [green]✓[/] {job.display_name} — {msg}")
+                                console.print(f"  [green]\u2713[/] {job.display_name} \u2014 {msg}")
                         else:
                             failures.append((job.display_name, msg))
-                            console.print(f"  [red]✗[/] {job.display_name} — {msg}")
+                            console.print(f"  [red]\u2717[/] {job.display_name} \u2014 {msg}")
                         progress.advance(task_id)
 
     finally:
@@ -394,7 +394,7 @@ def transcribe(
         else:
             console.print(f"[bold yellow]Finished with issues.[/] {success}/{len(jobs)} succeeded.")
             for name, err in failures:
-                console.print(f"  [red]•[/] {name}: {err}")
+                console.print(f"  [red]\u2022[/] {name}: {err}")
 
 
 @app.command("web")
@@ -432,51 +432,51 @@ def doctor() -> None:
     table.add_column("Status")
     table.add_column("Details")
 
-    table.add_row("Python", "[green]✓[/]", f"{sys.version.split()[0]}")
+    table.add_row("Python", "[green]\u2713[/]", f"{sys.version.split()[0]}")
 
     if check_ffmpeg():
-        table.add_row("ffmpeg", "[green]✓[/]", "Found in PATH")
+        table.add_row("ffmpeg", "[green]\u2713[/]", "Found in PATH")
     else:
-        table.add_row("ffmpeg", "[red]✗[/]", "Not found")
+        table.add_row("ffmpeg", "[red]\u2717[/]", "Not found")
 
     if check_ytdlp():
-        table.add_row("yt-dlp", "[green]✓[/]", "installed")
+        table.add_row("yt-dlp", "[green]\u2713[/]", "installed")
     else:
-        table.add_row("yt-dlp", "[yellow]—[/]", "optional (YouTube/URLs)")
+        table.add_row("yt-dlp", "[yellow]\u2014[/]", "optional (YouTube/URLs)")
 
     try:
         from video_transcriber.diarize import check_diarization_available
 
         if check_diarization_available():
-            table.add_row("pyannote.audio", "[green]✓[/]", "diarization ready")
+            table.add_row("pyannote.audio", "[green]\u2713[/]", "diarization ready")
         else:
-            table.add_row("pyannote.audio", "[yellow]—[/]", "optional (--diarize)")
+            table.add_row("pyannote.audio", "[yellow]\u2014[/]", "optional (--diarize)")
     except Exception:
-        table.add_row("pyannote.audio", "[yellow]—[/]", "optional (--diarize)")
+        table.add_row("pyannote.audio", "[yellow]\u2014[/]", "optional (--diarize)")
 
     try:
         import gradio
 
-        table.add_row("gradio", "[green]✓[/]", getattr(gradio, "__version__", "installed"))
+        table.add_row("gradio", "[green]\u2713[/]", getattr(gradio, "__version__", "installed"))
     except ImportError:
-        table.add_row("gradio", "[yellow]—[/]", "optional (web UI)")
+        table.add_row("gradio", "[yellow]\u2014[/]", "optional (web UI)")
 
     try:
         import torch
 
         if torch.cuda.is_available():
-            table.add_row("CUDA", "[green]✓[/]", torch.cuda.get_device_name(0))
+            table.add_row("CUDA", "[green]\u2713[/]", torch.cuda.get_device_name(0))
         else:
-            table.add_row("CUDA", "[yellow]—[/]", "CPU only")
+            table.add_row("CUDA", "[yellow]\u2014[/]", "CPU only")
     except ImportError:
-        table.add_row("CUDA", "[dim]—[/]", "torch not installed")
+        table.add_row("CUDA", "[dim]\u2014[/]", "torch not installed")
 
     try:
         import faster_whisper
 
-        table.add_row("faster-whisper", "[green]✓[/]", faster_whisper.__version__)
+        table.add_row("faster-whisper", "[green]\u2713[/]", faster_whisper.__version__)
     except Exception as e:
-        table.add_row("faster-whisper", "[red]✗[/]", str(e))
+        table.add_row("faster-whisper", "[red]\u2717[/]", str(e))
 
     console.print(table)
 
