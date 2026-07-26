@@ -90,16 +90,20 @@ Changelog = "https://github.com/idris81ahmad-cyber/video-transcriber/blob/main/C
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "src/video_transcriber",
-    "tests",
-    "README.md",
-    "LICENSE",
-    "CHANGELOG.md",
-    "pyproject.toml",
+    "/src",
+    "/tests",
+    "/README.md",
+    "/LICENSE",
+    "/CHANGELOG.md",
+    "/pyproject.toml",
 ]
 
+# src-layout: hatchling maps src/video_transcriber -> import video_transcriber
 [tool.hatch.build.targets.wheel]
 packages = ["src/video_transcriber"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src" = ""
 
 [tool.ruff]
 line-length = 100
