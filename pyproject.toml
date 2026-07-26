@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "video-transcriber"
-version = "1.0.0"
+version = "1.1.0"
 description = "Fast, accurate, fully local video & audio transcription powered by Faster-Whisper"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -28,6 +28,8 @@ keywords = [
     "vtt",
     "cli",
     "youtube",
+    "diarization",
+    "speaker",
     "local",
     "offline",
 ]
@@ -57,6 +59,10 @@ dependencies = [
 
 [project.optional-dependencies]
 url = ["yt-dlp>=2024.1.0"]
+diarization = [
+    "pyannote.audio>=3.1.0",
+    "torch",
+]
 dev = [
     "ruff>=0.4.0",
     "mypy>=1.8.0",
