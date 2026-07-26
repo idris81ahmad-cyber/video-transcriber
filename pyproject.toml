@@ -1,0 +1,71 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "video-transcriber"
+version = "1.0.0"
+description = "Fast, accurate, local video & audio transcription powered by Faster-Whisper"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [
+    { name = "idris81ahmad-cyber", email = "idris81ahmad@gmail.com" }
+]
+keywords = [
+    "whisper",
+    "transcription",
+    "speech-to-text",
+    "faster-whisper",
+    "video",
+    "subtitle",
+    "srt",
+    "cli",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "faster-whisper>=1.0.3",
+    "rich>=13.7.0",
+    "typer>=0.12.0",
+]
+
+[project.optional-dependencies]
+url = ["yt-dlp>=2024.1.0"]
+dev = [
+    "ruff>=0.4.0",
+    "mypy>=1.8.0",
+]
+
+[project.scripts]
+video-transcriber = "video_transcriber.cli:app"
+transcribe = "video_transcriber.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/idris81ahmad-cyber/video-transcriber"
+Repository = "https://github.com/idris81ahmad-cyber/video-transcriber"
+Issues = "https://github.com/idris81ahmad-cyber/video-transcriber/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/video_transcriber"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
