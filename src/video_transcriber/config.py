@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
-# tomllib is stdlib in 3.11+, fall back to tomli for older Python
 try:
     import tomllib
 except ModuleNotFoundError:
@@ -30,34 +28,21 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "skip_existing": False,
     "quiet": False,
     "output": None,
+    "workers": 1,
 }
 
 
 def _config_paths() -> list[Path]:
-    """Return config file locations in priority order (highest first)."""
-    paths = [
+    return [
         Path.cwd() / "video-transcriber.toml",
         Path.cwd() / ".video-transcriber.toml",
+        Path.home() / ".config" / "video-transcriber" / "config.toml",
+        Path.home() / ".video-transcriber.toml",
     ]
-
-    # XDG config home
-    xdg = Path.home() / ".config" / "video-transcriber" / "config.toml"
-    paths.append(xdg)
-
-    # Legacy / simple home location
-    paths.append(Path.home() / ".video-transcriber.toml")
-
-    return paths
 
 
 def load_config() -> Dict[str, Any]:
-    """
-    Load configuration from the first existing config file.
-
-    Returns a dict with defaults filled in for missing keys.
-    """
     cfg = dict(DEFAULT_CONFIG)
-
     if tomllib is None:
         return cfg
 
@@ -66,7 +51,6 @@ def load_config() -> Dict[str, Any]:
             try:
                 with path.open("rb") as f:
                     data = tomllib.load(f)
-                # Support both flat and [defaults] section
                 if "defaults" in data and isinstance(data["defaults"], dict):
                     data = data["defaults"]
                 for key, value in data.items():
@@ -74,22 +58,5 @@ def load_config() -> Dict[str, Any]:
                         cfg[key] = value
                 break
             except Exception:
-                # Silently ignore broken config files
                 continue
-
     return cfg
-
-
-def config_help_text() -> str:
-    """Return a short help string about config files."""
-    locations = "\n".join(f"  • {p}" for p in _config_paths())
-    return (
-        "Config file locations (first found wins):\n"
-        f"{locations}\n\n"
-        "Example video-transcriber.toml:\n\n"
-        "  model = \"medium\"\n"
-        "  device = \"cuda\"\n"
-        "  format = \"srt\"\n"
-        "  diarize = true\n"
-        "  skip_existing = true\n"
-    )
