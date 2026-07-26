@@ -13,123 +13,107 @@ No cloud. No API keys. Works offline after the first model download.
 ## Highlights
 
 - 🎬 Transcribe **video** (MP4, MOV, MKV, WebM…) or **audio** files
-- 🎥 **YouTube & URL support** (via yt-dlp) — just paste a link
-- 👥 **Speaker diarization** (who spoke when) via pyannote
-- ⚡ Extremely fast thanks to CTranslate2 + optional GPU
-- 🌐 Auto language detection + 99 languages
-- ⏱️ Segment or **word-level** timestamps
-- 📝 Export to **TXT / SRT / VTT / JSON** (multiple at once)
-- 📁 Batch folders (recursive) + skip already transcribed files
-- 🖥️ Beautiful terminal UI with `rich` + `typer`
-- 🔍 Built-in `doctor` and `models` commands
+- 🎥 **YouTube & URL support** (via yt-dlp)
+- 👥 **Speaker diarization** (who spoke when)
+- ⚡ Extremely fast (CTranslate2 + optional GPU)
+- 📄 **Config file** support for permanent defaults
+- 📝 Export to **TXT / SRT / VTT / JSON**
+- 📁 Batch folders + skip already done files
+- 🖥️ Beautiful terminal UI (Typer + Rich)
 
 ---
 
 ## Installation
-
-### Prerequisites
-
-- Python 3.9+
-- [FFmpeg](https://ffmpeg.org/) in your PATH
-
-```bash
-# macOS
-brew install ffmpeg
-
-# Ubuntu / Debian
-sudo apt update && sudo apt install ffmpeg
-
-# Windows
-# Download from https://ffmpeg.org/download.html and add to PATH
-```
-
-### Install from source
 
 ```bash
 git clone https://github.com/idris81ahmad-cyber/video-transcriber.git
 cd video-transcriber
 
 python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 
-# Core only
 pip install -e .
-
-# With YouTube / URL support
-pip install -e ".[url]"
-
-# With speaker diarization
-pip install -e ".[diarization]"
-
-# Everything
-pip install -e ".[url,diarization]"
+pip install -e ".[url]"            # YouTube support
+pip install -e ".[diarization]"    # Speaker labels
 ```
+
+Requires **FFmpeg** in your PATH.
 
 ---
 
 ## Quick Start
 
 ```bash
-# Local file
+# Simplest possible usage (default command)
+video-transcriber interview.mp4
+
+# Explicit command still works
 video-transcriber transcribe interview.mp4
 
-# With speaker labels
-video-transcriber transcribe interview.mp4 --diarize -f srt
+# With speaker diarization + subtitles
+video-transcriber interview.mp4 --diarize -f srt
 
 # YouTube
-video-transcriber transcribe "https://www.youtube.com/watch?v=dQw4w9WgXcQ" -f srt
+video-transcriber "https://youtu.be/XXXX" -m medium -f srt
 
-# High quality + diarization
-video-transcriber transcribe meeting.mp4 -m medium --diarize -f srt,json
+# Whole folder
+video-transcriber ./recordings -r -f srt --skip-existing
 ```
+
+---
+
+## Config File
+
+Create a config file so you don't have to repeat flags every time.
+
+**Locations** (first found wins):
+
+1. `./video-transcriber.toml` (project local)
+2. `~/.config/video-transcriber/config.toml`
+3. `~/.video-transcriber.toml`
+
+**Example** `~/.config/video-transcriber/config.toml`:
+
+```toml
+model = "medium"
+device = "cuda"
+format = "srt"
+diarize = true
+skip_existing = true
+language = "en"
+```
+
+After that you can simply run:
+
+```bash
+video-transcriber meeting.mp4
+```
+
+and it will use `medium` + CUDA + SRT + diarization automatically.
+
+CLI flags always override the config file.
 
 ---
 
 ## Speaker Diarization
 
-Identify **who spoke when**.
-
 ```bash
 pip install 'video-transcriber[diarization]'
-```
 
-You also need a Hugging Face token:
+# Accept model conditions + set token
+# https://huggingface.co/pyannote/speaker-diarization-3.1
+export HF_TOKEN=hf_xxxxxxxx
 
-1. Accept the model conditions:  
-   https://huggingface.co/pyannote/speaker-diarization-3.1
-2. Create a token at https://huggingface.co/settings/tokens
-3. Export it:
-
-```bash
-export HF_TOKEN=hf_xxxxxxxxxxxxxxxx
-```
-
-Then run:
-
-```bash
-video-transcriber transcribe meeting.mp4 --diarize -f srt
-```
-
-Output example (SRT):
-
-```
-1
-00:00:01,200 --> 00:00:04,800
-[SPEAKER_00] Welcome everyone to today's meeting.
-
-2
-00:00:05,100 --> 00:00:08,400
-[SPEAKER_01] Thanks. Let's start with the agenda.
+video-transcriber meeting.mp4 --diarize -f srt
 ```
 
 ---
 
-## YouTube & URL Support
+## YouTube / URL Support
 
 ```bash
 pip install 'video-transcriber[url]'
-
-video-transcriber transcribe "https://youtu.be/XXXX" -m medium -f srt,vtt
+video-transcriber "https://www.youtube.com/watch?v=XXXX" -f srt
 ```
 
 ---
@@ -138,30 +122,10 @@ video-transcriber transcribe "https://youtu.be/XXXX" -m medium -f srt,vtt
 
 | Command | Description |
 |---------|-------------|
-| `transcribe` | Main transcription command |
-| `doctor`    | Check ffmpeg, yt-dlp, diarization, CUDA |
-| `models`    | Show model size / speed / accuracy table |
-| `--version` | Show package version |
-
----
-
-## Recommended Models
-
-| Model      | Relative Speed | Accuracy   | VRAM (approx) | Best for                  |
-|------------|----------------|------------|---------------|---------------------------|
-| `tiny`     | Very Fast      | Low        | ~1 GB         | Quick drafts / testing    |
-| `base`     | Fast           | Decent     | ~1 GB         | Everyday short clips      |
-| `small`    | Good           | Good       | ~2 GB         | **Balanced default**      |
-| `medium`   | Medium         | High       | ~5 GB         | High quality work         |
-| `large-v3` | Slower         | Best       | ~10 GB        | Maximum accuracy          |
-
----
-
-## System Check
-
-```bash
-video-transcriber doctor
-```
+| *(default)* / `transcribe` | Transcribe files / folders / URLs |
+| `doctor` | Check system dependencies |
+| `models` | Show model recommendations |
+| `--version` | Show version |
 
 ---
 
