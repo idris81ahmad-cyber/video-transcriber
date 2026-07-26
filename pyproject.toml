@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "video-transcriber"
-version = "1.3.0"
+version = "1.4.0"
 description = "Fast, accurate, fully local video & audio transcription powered by Faster-Whisper"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -30,6 +30,8 @@ keywords = [
     "youtube",
     "diarization",
     "speaker",
+    "gradio",
+    "web",
     "local",
     "offline",
 ]
@@ -64,6 +66,7 @@ diarization = [
     "pyannote.audio>=3.1.0",
     "torch",
 ]
+web = ["gradio>=4.0.0"]
 dev = [
     "ruff>=0.4.0",
     "mypy>=1.8.0",
