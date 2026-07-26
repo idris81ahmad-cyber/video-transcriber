@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional
 
 from faster_whisper import WhisperModel
 from rich.console import Console
@@ -27,7 +27,7 @@ console = Console()
 
 @dataclass
 class TranscriptionResult:
-    segments: List
+    segments: List[Any]
     language: str
     language_probability: float
     duration: float
@@ -65,10 +65,14 @@ def transcribe_file(
     word_timestamps: bool = False,
     vad_filter: bool = True,
     vad_parameters: Optional[dict] = None,
+    diarize: bool = False,
+    diarization_pipeline: Any = None,
+    device: str = "cpu",
 ) -> TranscriptionResult:
     """
     Transcribe a single media file.
     Automatically extracts audio if the input is a video.
+    Optionally runs speaker diarization.
     """
     media_path = media_path.resolve()
     is_video = media_path.suffix.lower() in VIDEO_EXTS
@@ -94,7 +98,7 @@ def transcribe_file(
         )
 
         # Collect all segments while showing a nice progress bar
-        segments = []
+        segments: List[Any] = []
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -109,6 +113,21 @@ def transcribe_file(
             for segment in segments_gen:
                 segments.append(segment)
                 progress.update(task, advance=1)
+
+        # Optional speaker diarization
+        if diarize:
+            from video_transcriber.diarize import (
+                assign_speakers_to_transcript,
+                load_diarization_pipeline,
+                run_diarization,
+            )
+
+            pipeline = diarization_pipeline or load_diarization_pipeline(device=device)
+            speaker_turns = run_diarization(pipeline, audio_path)
+            segments = assign_speakers_to_transcript(segments, speaker_turns)
+
+            n_speakers = len({getattr(s, "speaker", "?") for s in segments})
+            console.print(f"[green]✓[/] Detected [bold]{n_speakers}[/] speaker(s)")
 
         return TranscriptionResult(
             segments=segments,
