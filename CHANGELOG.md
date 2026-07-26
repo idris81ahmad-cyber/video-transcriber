@@ -5,41 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-07-26
+
+### Added
+- **Docker** support (`Dockerfile` + `docker-compose.yml`)
+- Standalone **binary build scripts** (PyInstaller) for Linux/macOS and Windows
+- `.dockerignore`
+
 ## [1.4.1] - 2026-07-26
 
 ### Added
-- **CSV export** (`-f csv`) with optional speaker column
-- Unit test suite for utils, exporters, and CLI helpers
-- CI step runs `pytest` on Python 3.10–3.12
+- CSV export, unit tests, CI pytest
 
 ### Changed
-- Safer URL detection and filename sanitization for YouTube titles
-- Lazy-load Faster-Whisper so `--version` / `doctor` work without native DLLs
-- Export writers create parent directories automatically
+- Safer URL detection, lazy Faster-Whisper import
 
 ## [1.4.0] - 2026-07-26
 
 ### Added
-- **Web UI** powered by Gradio (`video-transcriber web`)
-- Optional `[web]` extra
-- Browser upload + YouTube URL + settings + downloadable outputs
+- Web UI (Gradio)
 
 ## [1.3.0] - 2026-07-26
 
 ### Added
-- Concurrent batch processing (`--workers N`)
-- Unified Rich progress bar for batch jobs
+- Concurrent batch processing (`--workers`)
 
 ## [1.2.0] - 2026-07-26
 
 ### Added
-- Default command (no need to type `transcribe`)
-- Config file support
+- Default command + config file
 
 ## [1.1.0] - 2026-07-26
 
 ### Added
-- Speaker diarization (`--diarize`)
+- Speaker diarization
 
 ## [1.0.0] - 2026-07-26
 
