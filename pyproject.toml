@@ -63,6 +63,14 @@ Issues = "https://github.com/idris81ahmad-cyber/video-transcriber/issues"
 [tool.hatch.build.targets.wheel]
 packages = ["src/video_transcriber"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py39"
