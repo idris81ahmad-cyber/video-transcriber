@@ -2,22 +2,26 @@
 
 from __future__ import annotations
 
+import shutil
 import sys
+import tempfile
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
 
 from video_transcriber import __version__
 from video_transcriber.core import load_model, save_result, transcribe_file
 from video_transcriber.utils import (
     MEDIA_EXTS,
     check_ffmpeg,
+    check_ytdlp,
     discover_media,
+    download_from_url,
     is_url,
 )
 
@@ -29,6 +33,15 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+
+
+@dataclass
+class Job:
+    """A single transcription job (local file or downloaded URL)."""
+    path: Path
+    display_name: str
+    is_temp: bool = False          # True if we downloaded it and should clean up
+    original_url: Optional[str] = None
 
 
 def version_callback(value: bool) -> None:
@@ -96,7 +109,7 @@ def transcribe(
         None,
         "--output",
         "-o",
-        help="Output file or directory. Defaults next to the source.",
+        help="Output file or directory. Defaults next to the source (or current dir for URLs).",
         rich_help_panel="Output",
     ),
     word_timestamps: bool = typer.Option(
@@ -139,13 +152,13 @@ def transcribe(
     ),
 ) -> None:
     """
-    Transcribe one or more video/audio files (or entire folders).
+    Transcribe one or more video/audio files, folders, or YouTube/URLs.
 
     Examples:
 
       video-transcriber transcribe interview.mp4
 
-      video-transcriber transcribe *.mp4 -f srt,vtt -m medium
+      video-transcriber transcribe "https://www.youtube.com/watch?v=dQw4w9WgXcQ" -f srt
 
       video-transcriber transcribe ./lectures -r --format srt --skip-existing
     """
@@ -170,46 +183,71 @@ def transcribe(
         )
         raise typer.Exit(1)
 
-    # Collect all media files
-    media_files: List[Path] = []
+    # ------------------------------------------------------------------
+    # Resolve all inputs into Job objects
+    # ------------------------------------------------------------------
+    jobs: List[Job] = []
+    temp_dirs: List[Path] = []
+
     for item in inputs:
         if is_url(item):
-            console.print(
-                "[yellow]URL support requires the optional 'url' extra.[/]\n"
-                "Install with: [cyan]pip install 'video-transcriber[url]'[/]\n"
-                "Then use yt-dlp to download first, or open an issue to request full URL support."
-            )
-            raise typer.Exit(1)
+            if not check_ytdlp():
+                console.print(
+                    Panel(
+                        "[red]yt-dlp is required for URL / YouTube support[/]\n\n"
+                        "Install the optional extra:\n"
+                        "  [cyan]pip install 'video-transcriber[url]'[/]\n\n"
+                        "or simply:\n"
+                        "  [cyan]pip install yt-dlp[/]",
+                        title="Missing Dependency",
+                        border_style="red",
+                    )
+                )
+                raise typer.Exit(1)
 
-        p = Path(item)
-        if not p.exists():
-            console.print(f"[red]Error:[/] Path not found: {item}")
-            raise typer.Exit(1)
+            if not quiet:
+                console.print(f"[cyan]Downloading[/] {item}")
 
-        found = discover_media(p, recursive=recursive)
-        if not found and p.is_file():
-            console.print(f"[red]Error:[/] Unsupported file type: {p.suffix}")
-            console.print(f"Supported extensions: {', '.join(sorted(MEDIA_EXTS))}")
-            raise typer.Exit(1)
-        media_files.extend(found)
+            try:
+                tmp_dir = Path(tempfile.mkdtemp(prefix="vt-url-"))
+                temp_dirs.append(tmp_dir)
+                path, title = download_from_url(item, output_dir=tmp_dir, audio_only=True)
+                jobs.append(Job(path=path, display_name=title, is_temp=True, original_url=item))
+            except Exception as e:
+                console.print(f"[red]✗ Download failed:[/] {item}\n   {e}")
+                continue
+        else:
+            p = Path(item)
+            if not p.exists():
+                console.print(f"[red]Error:[/] Path not found: {item}")
+                raise typer.Exit(1)
 
-    if not media_files:
-        console.print("[yellow]No media files found.[/]")
+            found = discover_media(p, recursive=recursive)
+            if not found and p.is_file():
+                console.print(f"[red]Error:[/] Unsupported file type: {p.suffix}")
+                console.print(f"Supported extensions: {', '.join(sorted(MEDIA_EXTS))}")
+                raise typer.Exit(1)
+
+            for f in found:
+                jobs.append(Job(path=f, display_name=f.name))
+
+    if not jobs:
+        console.print("[yellow]No media to process.[/]")
         raise typer.Exit(0)
 
-    # Deduplicate while preserving order
+    # Deduplicate by path
     seen = set()
-    unique_files = []
-    for f in media_files:
-        if f not in seen:
-            seen.add(f)
-            unique_files.append(f)
-    media_files = unique_files
+    unique_jobs: List[Job] = []
+    for job in jobs:
+        if job.path not in seen:
+            seen.add(job.path)
+            unique_jobs.append(job)
+    jobs = unique_jobs
 
     if not quiet:
         console.print(
             Panel(
-                f"[bold]{len(media_files)}[/] file(s) queued\n"
+                f"[bold]{len(jobs)}[/] item(s) queued\n"
                 f"Model: [cyan]{model}[/] • Device: [green]{device}[/]\n"
                 f"Formats: [yellow]{', '.join(fmt_list)}[/]",
                 title="Video Transcriber",
@@ -221,68 +259,83 @@ def transcribe(
     model_obj = load_model(model, device=device, compute_type=compute_type)
 
     success = 0
-    for idx, media in enumerate(media_files, 1):
-        if not quiet:
-            console.rule(f"[bold]{idx}/{len(media_files)}[/]  {media.name}")
-
-        # Determine output path
-        if output is None:
-            out_base = media.with_suffix("")
-        elif output.is_dir() or (len(media_files) > 1 and not output.suffix):
-            out_base = output / media.stem
-            output.mkdir(parents=True, exist_ok=True)
-        else:
-            out_base = output.with_suffix("")
-
-        # Skip existing check
-        if skip_existing:
-            existing = all((out_base.with_suffix(f".{fmt}")).exists() for fmt in fmt_list)
-            if existing:
-                if not quiet:
-                    console.print(f"[dim]Skipping (already exists) → {out_base}[/]")
-                success += 1
-                continue
-
-        try:
-            result = transcribe_file(
-                model_obj,
-                media,
-                language=language,
-                beam_size=beam_size,
-                word_timestamps=word_timestamps,
-                vad_filter=vad_filter,
-            )
-
-            written = save_result(
-                result,
-                out_base,
-                fmt_list,
-                word_level=word_timestamps,
-            )
-
+    try:
+        for idx, job in enumerate(jobs, 1):
             if not quiet:
-                console.print(
-                    f"[green]✓[/] Detected language: [bold]{result.language}[/] "
-                    f"({result.language_probability:.1%}) • "
-                    f"Duration: {result.duration:.1f}s"
+                console.rule(f"[bold]{idx}/{len(jobs)}[/]  {job.display_name}")
+
+            # Determine output base path
+            if output is None:
+                if job.is_temp:
+                    # For URLs default to current working directory
+                    safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in job.display_name)
+                    safe_name = safe_name.strip()[:80] or "transcript"
+                    out_base = Path.cwd() / safe_name
+                else:
+                    out_base = job.path.with_suffix("")
+            elif output.is_dir() or (len(jobs) > 1 and not output.suffix):
+                out_base = output / (job.path.stem if not job.is_temp else job.display_name[:60])
+                output.mkdir(parents=True, exist_ok=True)
+            else:
+                out_base = output.with_suffix("")
+
+            # Skip existing
+            if skip_existing:
+                existing = all((out_base.with_suffix(f".{fmt}")).exists() for fmt in fmt_list)
+                if existing:
+                    if not quiet:
+                        console.print(f"[dim]Skipping (already exists) → {out_base}[/]")
+                    success += 1
+                    continue
+
+            try:
+                result = transcribe_file(
+                    model_obj,
+                    job.path,
+                    language=language,
+                    beam_size=beam_size,
+                    word_timestamps=word_timestamps,
+                    vad_filter=vad_filter,
                 )
-                for w in written:
-                    console.print(f"   [dim]→[/] {w}")
 
-            success += 1
+                written = save_result(
+                    result,
+                    out_base,
+                    fmt_list,
+                    word_level=word_timestamps,
+                )
 
-        except Exception as e:
-            console.print(f"[red]✗ Failed:[/] {media.name}\n   {e}")
-            if not quiet:
-                console.print_exception(show_locals=False)
+                if not quiet:
+                    console.print(
+                        f"[green]✓[/] Detected language: [bold]{result.language}[/] "
+                        f"({result.language_probability:.1%}) • "
+                        f"Duration: {result.duration:.1f}s"
+                    )
+                    for w in written:
+                        console.print(f"   [dim]→[/] {w}")
+
+                success += 1
+
+            except Exception as e:
+                console.print(f"[red]✗ Failed:[/] {job.display_name}\n   {e}")
+                if not quiet:
+                    console.print_exception(show_locals=False)
+
+    finally:
+        # Clean up temporary download directories
+        for d in temp_dirs:
+            try:
+                shutil.rmtree(d, ignore_errors=True)
+            except Exception:
+                pass
 
     if not quiet:
         console.print()
-        if success == len(media_files):
-            console.print(f"[bold green]All done![/] {success}/{len(media_files)} succeeded.")
+        if success == len(jobs):
+            console.print(f"[bold green]All done![/] {success}/{len(jobs)} succeeded.")
         else:
             console.print(
-                f"[bold yellow]Finished with issues.[/] {success}/{len(media_files)} succeeded."
+                f"[bold yellow]Finished with issues.[/] {success}/{len(jobs)} succeeded."
             )
 
 
@@ -303,7 +356,17 @@ def doctor() -> None:
     else:
         table.add_row("ffmpeg", "[red]✗[/]", "Not found — required for video files")
 
-    # CUDA / torch availability (lightweight check)
+    # yt-dlp
+    if check_ytdlp():
+        try:
+            import yt_dlp
+            table.add_row("yt-dlp", "[green]✓[/]", getattr(yt_dlp, "version", lambda: "ok")().__str__() if callable(getattr(yt_dlp, "version", None)) else "installed")
+        except Exception:
+            table.add_row("yt-dlp", "[green]✓[/]", "installed")
+    else:
+        table.add_row("yt-dlp", "[yellow]—[/]", "Not installed (optional — needed for YouTube/URLs)")
+
+    # CUDA / torch
     try:
         import torch
 
@@ -327,6 +390,7 @@ def doctor() -> None:
     console.print(table)
     console.print()
     console.print("[dim]Tip: For GPU acceleration install CUDA-enabled torch + use --device cuda[/]")
+    console.print("[dim]Tip: For YouTube/URL support → pip install 'video-transcriber[url]'[/]")
 
 
 @app.command("models")
