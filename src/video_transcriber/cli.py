@@ -7,7 +7,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional
 
 import typer
 from rich.console import Console
@@ -40,7 +40,7 @@ class Job:
     """A single transcription job (local file or downloaded URL)."""
     path: Path
     display_name: str
-    is_temp: bool = False          # True if we downloaded it and should clean up
+    is_temp: bool = False
     original_url: Optional[str] = None
 
 
@@ -130,6 +130,12 @@ def transcribe(
         help="Enable/disable voice activity detection filter.",
         rich_help_panel="Transcription",
     ),
+    diarize: bool = typer.Option(
+        False,
+        "--diarize",
+        help="Enable speaker diarization (requires [diarization] extra + HF token).",
+        rich_help_panel="Transcription",
+    ),
     recursive: bool = typer.Option(
         False,
         "--recursive",
@@ -158,9 +164,9 @@ def transcribe(
 
       video-transcriber transcribe interview.mp4
 
-      video-transcriber transcribe "https://www.youtube.com/watch?v=dQw4w9WgXcQ" -f srt
+      video-transcriber transcribe interview.mp4 --diarize -f srt
 
-      video-transcriber transcribe ./lectures -r --format srt --skip-existing
+      video-transcriber transcribe "https://www.youtube.com/watch?v=dQw4w9WgXcQ" -f srt
     """
     fmt_list = [f.strip().lower() for f in formats.split(",") if f.strip()]
     valid_fmts = {"txt", "srt", "vtt", "json"}
@@ -182,6 +188,26 @@ def transcribe(
             )
         )
         raise typer.Exit(1)
+
+    if diarize:
+        from video_transcriber.diarize import check_diarization_available
+
+        if not check_diarization_available():
+            console.print(
+                Panel(
+                    "[red]Speaker diarization requires the optional extra[/]\n\n"
+                    "Install with:\n"
+                    "  [cyan]pip install 'video-transcriber[diarization]'[/]\n\n"
+                    "You also need a Hugging Face token with access to the pyannote models.\n"
+                    "1. Accept the conditions at:\n"
+                    "   https://huggingface.co/pyannote/speaker-diarization-3.1\n"
+                    "2. Create a token and set:\n"
+                    "   [cyan]export HF_TOKEN=hf_...[/]",
+                    title="Missing Dependency",
+                    border_style="red",
+                )
+            )
+            raise typer.Exit(1)
 
     # ------------------------------------------------------------------
     # Resolve all inputs into Job objects
@@ -245,11 +271,12 @@ def transcribe(
     jobs = unique_jobs
 
     if not quiet:
+        extra = " • [magenta]diarization ON[/]" if diarize else ""
         console.print(
             Panel(
                 f"[bold]{len(jobs)}[/] item(s) queued\n"
                 f"Model: [cyan]{model}[/] • Device: [green]{device}[/]\n"
-                f"Formats: [yellow]{', '.join(fmt_list)}[/]",
+                f"Formats: [yellow]{', '.join(fmt_list)}[/]{extra}",
                 title="Video Transcriber",
                 border_style="cyan",
             )
@@ -257,6 +284,13 @@ def transcribe(
 
     # Load model once
     model_obj = load_model(model, device=device, compute_type=compute_type)
+
+    # Load diarization pipeline once if needed
+    diarization_pipeline = None
+    if diarize:
+        from video_transcriber.diarize import load_diarization_pipeline
+
+        diarization_pipeline = load_diarization_pipeline(device=device)
 
     success = 0
     try:
@@ -267,7 +301,6 @@ def transcribe(
             # Determine output base path
             if output is None:
                 if job.is_temp:
-                    # For URLs default to current working directory
                     safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in job.display_name)
                     safe_name = safe_name.strip()[:80] or "transcript"
                     out_base = Path.cwd() / safe_name
@@ -296,6 +329,9 @@ def transcribe(
                     beam_size=beam_size,
                     word_timestamps=word_timestamps,
                     vad_filter=vad_filter,
+                    diarize=diarize,
+                    diarization_pipeline=diarization_pipeline,
+                    device=device,
                 )
 
                 written = save_result(
@@ -322,7 +358,6 @@ def transcribe(
                     console.print_exception(show_locals=False)
 
     finally:
-        # Clean up temporary download directories
         for d in temp_dirs:
             try:
                 shutil.rmtree(d, ignore_errors=True)
@@ -347,39 +382,39 @@ def doctor() -> None:
     table.add_column("Status")
     table.add_column("Details")
 
-    # Python
     table.add_row("Python", "[green]✓[/]", f"{sys.version.split()[0]}")
 
-    # ffmpeg
     if check_ffmpeg():
         table.add_row("ffmpeg", "[green]✓[/]", "Found in PATH")
     else:
         table.add_row("ffmpeg", "[red]✗[/]", "Not found — required for video files")
 
-    # yt-dlp
     if check_ytdlp():
-        try:
-            import yt_dlp
-            table.add_row("yt-dlp", "[green]✓[/]", getattr(yt_dlp, "version", lambda: "ok")().__str__() if callable(getattr(yt_dlp, "version", None)) else "installed")
-        except Exception:
-            table.add_row("yt-dlp", "[green]✓[/]", "installed")
+        table.add_row("yt-dlp", "[green]✓[/]", "installed")
     else:
-        table.add_row("yt-dlp", "[yellow]—[/]", "Not installed (optional — needed for YouTube/URLs)")
+        table.add_row("yt-dlp", "[yellow]—[/]", "Not installed (optional — YouTube/URLs)")
 
-    # CUDA / torch
+    # Diarization
+    try:
+        from video_transcriber.diarize import check_diarization_available
+
+        if check_diarization_available():
+            table.add_row("pyannote.audio", "[green]✓[/]", "installed (diarization ready)")
+        else:
+            table.add_row("pyannote.audio", "[yellow]—[/]", "Not installed (optional — --diarize)")
+    except Exception:
+        table.add_row("pyannote.audio", "[yellow]—[/]", "Not installed (optional — --diarize)")
+
     try:
         import torch
 
-        cuda_available = torch.cuda.is_available()
-        if cuda_available:
-            name = torch.cuda.get_device_name(0)
-            table.add_row("CUDA", "[green]✓[/]", name)
+        if torch.cuda.is_available():
+            table.add_row("CUDA", "[green]✓[/]", torch.cuda.get_device_name(0))
         else:
             table.add_row("CUDA", "[yellow]—[/]", "Not available (CPU only)")
     except ImportError:
         table.add_row("CUDA", "[dim]—[/]", "torch not installed (optional)")
 
-    # faster-whisper
     try:
         import faster_whisper
 
@@ -391,6 +426,7 @@ def doctor() -> None:
     console.print()
     console.print("[dim]Tip: For GPU acceleration install CUDA-enabled torch + use --device cuda[/]")
     console.print("[dim]Tip: For YouTube/URL support → pip install 'video-transcriber[url]'[/]")
+    console.print("[dim]Tip: For speaker diarization → pip install 'video-transcriber[diarization]'[/]")
 
 
 @app.command("models")
