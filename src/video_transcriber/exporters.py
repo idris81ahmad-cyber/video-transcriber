@@ -9,12 +9,19 @@ from typing import Any, Iterable, List, Optional
 from video_transcriber.utils import format_timestamp
 
 
+def _speaker_prefix(segment: Any) -> str:
+    speaker = getattr(segment, "speaker", None)
+    if speaker:
+        return f"[{speaker}] "
+    return ""
+
+
 def write_txt(segments: Iterable[Any], path: Path) -> None:
     with path.open("w", encoding="utf-8") as f:
         for segment in segments:
             text = segment.text.strip()
             if text:
-                f.write(text + "\n")
+                f.write(_speaker_prefix(segment) + text + "\n")
 
 
 def write_srt(segments: Iterable[Any], path: Path, *, word_level: bool = False) -> None:
@@ -39,7 +46,7 @@ def write_srt(segments: Iterable[Any], path: Path, *, word_level: bool = False) 
                     continue
                 f.write(f"{index}\n")
                 f.write(f"{start} --> {end}\n")
-                f.write(f"{text}\n\n")
+                f.write(f"{_speaker_prefix(segment)}{text}\n\n")
                 index += 1
 
 
@@ -62,7 +69,7 @@ def write_vtt(segments: Iterable[Any], path: Path, *, word_level: bool = False) 
                 if not text:
                     continue
                 f.write(f"{start} --> {end}\n")
-                f.write(f"{text}\n\n")
+                f.write(f"{_speaker_prefix(segment)}{text}\n\n")
 
 
 def write_json(
@@ -88,6 +95,10 @@ def write_json(
             "end": segment.end,
             "text": segment.text.strip(),
         }
+        speaker = getattr(segment, "speaker", None)
+        if speaker:
+            seg["speaker"] = speaker
+
         if word_level and hasattr(segment, "words") and segment.words:
             seg["words"] = [
                 {
