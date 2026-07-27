@@ -95,22 +95,20 @@ video-transcriber web
 
 ## Commands
 
-<<<<<<< HEAD
 | Command | Description |
 |---------|-------------|
 | *(default)* | Transcribe files / folders / URLs |
-| `web` | Launch browser UI |
+| `web` | Launch local Gradio browser UI |
 | `doctor` | System check |
 | `models` | Model recommendations |
-=======
+
 ### Local Gradio (fully offline with Faster-Whisper)
 
 ```bash
 pip install 'video-transcriber[web]'
 video-transcriber web
+# open http://127.0.0.1:7860
 ```
-
-Options:
 
 ```bash
 video-transcriber web --port 8080
@@ -118,17 +116,12 @@ video-transcriber web --share          # public Gradio link
 video-transcriber web --host 0.0.0.0   # listen on all interfaces
 ```
 
-Features:
-- Upload video/audio or paste a YouTube URL
-- Choose model, device, language, formats
-- Optional speaker diarization
-- Download TXT / SRT / VTT / JSON
->>>>>>> 540a8e7 (Add Vercel-ready Next.js web UI with cloud Whisper API.)
-
 ### Vercel web app (cloud Whisper)
 
-The `web/` folder is a Next.js app you can deploy on Vercel.  
-Local Faster-Whisper is **too large / long-running** for Vercel serverless, so the hosted UI uses **Groq or OpenAI Whisper**.
+The `web/` folder is a Next.js app deployed on Vercel.  
+Local Faster-Whisper is too large / long-running for Vercel serverless, so the hosted UI uses **Groq or OpenAI Whisper**.
+
+Live: https://video-transcriber-flame.vercel.app
 
 ```bash
 cd web
@@ -138,12 +131,12 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Deploy:
+Deploy / update:
 
 ```bash
 cd web
 vercel --prod
-# then set GROQ_API_KEY or OPENAI_API_KEY in the Vercel project env vars
+# set GROQ_API_KEY or OPENAI_API_KEY in the Vercel project env vars
 ```
 
 ---

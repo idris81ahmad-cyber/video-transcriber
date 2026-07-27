@@ -14,7 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/
@@ -34,10 +34,11 @@ env/
 web/node_modules/
 web/.next/
 web/.vercel/
+web/out/
 web/.env
 web/.env.local
 web/.env*.local
-web/out/
+!web/.env.example
 
 # PyInstaller
 *.manifest
@@ -69,7 +70,9 @@ dmypy.json
 
 # Environment
 .env
-.env.*
+.env.local
+.env.*.local
+!.env.example
 
 # IDE
 .idea/
@@ -81,7 +84,7 @@ dmypy.json
 .DS_Store
 Thumbs.db
 
-# Project specific
+# Project specific — local media & generated transcripts
 *.mp4
 *.mov
 *.mkv
@@ -91,9 +94,12 @@ Thumbs.db
 *.wav
 *.m4a
 *.flac
-*.srt
-*.vtt
-*.json
-!package.json
+*.opus
+*.aac
 tmp/
 uploads/
+output/
+outputs/
+/*.srt
+/*.vtt
+/*.csv
