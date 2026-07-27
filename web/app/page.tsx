@@ -114,9 +114,9 @@ export default function HomePage() {
         <div className="badge">Video Transcriber · Whisper on Vercel</div>
         <h1>Turn video & audio into clean transcripts</h1>
         <p>
-          Upload a clip, get timed subtitles and plain text. Cloud Whisper powers this
-          web app so it runs on Vercel. Use the local Python CLI for fully offline
-          Faster-Whisper.
+          Upload a clip, get timed subtitles and plain text. This Vercel app uses{" "}
+          <strong>xAI Grok Speech-to-Text</strong> (or Groq/OpenAI). For fully offline
+          Faster-Whisper, use the local Python CLI.
         </p>
       </header>
 
@@ -172,7 +172,7 @@ export default function HomePage() {
                     ? "Checking…"
                     : providerReady
                       ? "API key configured"
-                      : "Missing GROQ_API_KEY or OPENAI_API_KEY"
+                      : "Missing XAI_API_KEY (or Groq/OpenAI)"
                 }
               />
             </div>
