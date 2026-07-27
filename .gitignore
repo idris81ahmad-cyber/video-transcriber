@@ -30,6 +30,15 @@ venv/
 ENV/
 env/
 
+# Next.js / Vercel web app
+web/node_modules/
+web/.next/
+web/.vercel/
+web/.env
+web/.env.local
+web/.env*.local
+web/out/
+
 # PyInstaller
 *.manifest
 *.spec
