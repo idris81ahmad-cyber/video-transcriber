@@ -72,6 +72,13 @@ export default function HomePage() {
     setResult(null);
 
     try {
+      // Vercel Hobby request body limit is ~4.5 MB
+      if (file.size > 4 * 1024 * 1024) {
+        throw new Error(
+          `File is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Keep uploads under 4 MB on this free Vercel plan (compress or trim the audio).`,
+        );
+      }
+
       const body = new FormData();
       body.append("file", file);
       if (language.trim()) body.append("language", language.trim());
@@ -80,7 +87,31 @@ export default function HomePage() {
         method: "POST",
         body,
       });
-      const data = await res.json();
+
+      const raw = await res.text();
+      let data: {
+        error?: string;
+        text?: string;
+        language?: string;
+        duration?: number;
+        segments?: Array<{ id?: number; start: number; end: number; text: string }>;
+        provider?: string;
+        model?: string;
+      };
+
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        const snippet = raw.replace(/\s+/g, " ").slice(0, 160);
+        if (res.status === 413) {
+          throw new Error(
+            "Upload too large for Vercel (max ~4.5 MB). Compress or use a shorter clip.",
+          );
+        }
+        throw new Error(
+          `Server returned non-JSON (${res.status}). ${snippet || "Empty body"}`,
+        );
+      }
 
       if (!res.ok) {
         throw new Error(data.error || `Request failed (${res.status})`);
@@ -143,7 +174,7 @@ export default function HomePage() {
               onChange={(e) => onFiles(e.target.files)}
             />
             <strong>Drop a file here, or click to browse</strong>
-            <span>MP3, WAV, M4A, MP4, WEBM, OGG, FLAC · max ~25 MB</span>
+            <span>MP3, WAV, M4A, MP4, WEBM, OGG, FLAC · max 4 MB on Vercel Hobby</span>
           </div>
 
           {file && (

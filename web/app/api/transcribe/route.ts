@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
+/** Vercel serverless request body limit is ~4.5 MB on Hobby. */
+const MAX_BYTES = 4 * 1024 * 1024;
 
 type Provider = "xai" | "groq" | "openai";
 
@@ -34,7 +35,6 @@ function resolveProvider(): {
   const openaiKey = process.env.OPENAI_API_KEY?.trim();
   const modelOverride = process.env.WHISPER_MODEL?.trim();
 
-  // Prefer xAI when available (Grok Speech-to-Text)
   if (xaiKey) {
     return {
       provider: "xai",
@@ -67,7 +67,6 @@ function resolveProvider(): {
   );
 }
 
-/** Group word-level timestamps into subtitle-friendly segments. */
 function wordsToSegments(words: Word[], gapThreshold = 0.6, maxDuration = 6): Segment[] {
   if (!words.length) return [];
 
@@ -78,7 +77,11 @@ function wordsToSegments(words: Word[], gapThreshold = 0.6, maxDuration = 6): Se
     if (!bucket.length) return;
     const start = bucket[0].start;
     const end = bucket[bucket.length - 1].end;
-    const text = bucket.map((w) => w.text).join(" ").replace(/\s+/g, " ").trim();
+    const text = bucket
+      .map((w) => w.text)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
     const speaker =
       typeof bucket[0].speaker === "number" ? `SPEAKER_${bucket[0].speaker}` : undefined;
     if (text) {
@@ -115,6 +118,68 @@ function wordsToSegments(words: Word[], gapThreshold = 0.6, maxDuration = 6): Se
   return segments;
 }
 
+function extractErrorMessage(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== "object") return fallback;
+
+  const obj = payload as Record<string, unknown>;
+
+  if (typeof obj.error === "string" && obj.error.trim()) return obj.error;
+  if (obj.error && typeof obj.error === "object") {
+    const err = obj.error as Record<string, unknown>;
+    if (typeof err.message === "string" && err.message.trim()) return err.message;
+  }
+  if (typeof obj.message === "string" && obj.message.trim()) return obj.message;
+  if (typeof obj.detail === "string" && obj.detail.trim()) return obj.detail;
+
+  return fallback;
+}
+
+async function parseUpstreamJson(
+  res: Response,
+): Promise<{ ok: true; data: unknown } | { ok: false; status: number; message: string }> {
+  const contentType = res.headers.get("content-type") || "";
+  const rawText = await res.text();
+
+  if (!rawText.trim()) {
+    return {
+      ok: false,
+      status: res.status || 502,
+      message: `Empty response from speech API (${res.status || "no status"}).`,
+    };
+  }
+
+  let data: unknown;
+  try {
+    data = JSON.parse(rawText);
+  } catch {
+    // Upstream sometimes returns plain text / HTML (auth walls, 413, gateway errors)
+    const snippet = rawText.replace(/\s+/g, " ").slice(0, 240);
+    return {
+      ok: false,
+      status: res.status || 502,
+      message: `Speech API returned non-JSON (${res.status}). ${snippet}`,
+    };
+  }
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      status: res.status >= 400 && res.status < 600 ? res.status : 502,
+      message: extractErrorMessage(data, `Speech API error (${res.status})`),
+    };
+  }
+
+  return { ok: true, data };
+}
+
+/** Build a real Blob so Node fetch multipart encoding is reliable. */
+async function fileToBlob(file: File): Promise<{ blob: Blob; filename: string }> {
+  const bytes = await file.arrayBuffer();
+  const type = file.type || "application/octet-stream";
+  const filename = file.name || "audio.mp3";
+  return { blob: new Blob([bytes], { type }), filename };
+}
+
 async function transcribeWithXai(
   file: File,
   apiKey: string,
@@ -125,12 +190,15 @@ async function transcribeWithXai(
   duration?: number;
   segments: Segment[];
 }> {
+  const { blob, filename } = await fileToBlob(file);
+
+  // xAI requires non-file fields BEFORE `file` (file must be last).
   const outbound = new FormData();
-  outbound.append("file", file, file.name || "audio.mp3");
   if (language) {
     outbound.append("language", language);
     outbound.append("format", "true");
   }
+  outbound.append("file", blob, filename);
 
   const upstream = await fetch("https://api.x.ai/v1/stt", {
     method: "POST",
@@ -140,40 +208,19 @@ async function transcribeWithXai(
     body: outbound,
   });
 
-  const rawText = await upstream.text();
-  let payload: unknown;
-  try {
-    payload = JSON.parse(rawText);
-  } catch {
-    payload = { error: rawText };
+  const parsed = await parseUpstreamJson(upstream);
+  if (!parsed.ok) {
+    throw Object.assign(new Error(parsed.message), { status: parsed.status });
   }
 
-  if (!upstream.ok) {
-    const message =
-      typeof payload === "object" &&
-      payload &&
-      "error" in payload &&
-      typeof (payload as { error?: { message?: string } | string }).error === "object"
-        ? (payload as { error?: { message?: string } }).error?.message
-        : typeof payload === "object" &&
-            payload &&
-            "error" in payload &&
-            typeof (payload as { error?: string }).error === "string"
-          ? (payload as { error: string }).error
-          : `xAI STT error (${upstream.status})`;
-    throw Object.assign(new Error(message || `Transcription failed (${upstream.status})`), {
-      status: upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502,
-    });
-  }
-
-  const data = payload as {
+  const data = parsed.data as {
     text?: string;
     language?: string;
     duration?: number;
     words?: Word[];
   };
 
-  const words = data.words || [];
+  const words = Array.isArray(data.words) ? data.words : [];
   const segments = wordsToSegments(words);
 
   return {
@@ -202,8 +249,9 @@ async function transcribeOpenAiCompatible(
   duration?: number;
   segments: Segment[];
 }> {
+  const { blob, filename } = await fileToBlob(file);
+
   const outbound = new FormData();
-  outbound.append("file", file, file.name || "audio.mp3");
   outbound.append("model", model);
   outbound.append("response_format", "verbose_json");
   if (provider === "openai") {
@@ -212,6 +260,8 @@ async function transcribeOpenAiCompatible(
   if (language) {
     outbound.append("language", language);
   }
+  // file last for consistency
+  outbound.append("file", blob, filename);
 
   const upstream = await fetch(url, {
     method: "POST",
@@ -221,33 +271,12 @@ async function transcribeOpenAiCompatible(
     body: outbound,
   });
 
-  const rawText = await upstream.text();
-  let payload: unknown;
-  try {
-    payload = JSON.parse(rawText);
-  } catch {
-    payload = { error: rawText };
+  const parsed = await parseUpstreamJson(upstream);
+  if (!parsed.ok) {
+    throw Object.assign(new Error(parsed.message), { status: parsed.status });
   }
 
-  if (!upstream.ok) {
-    const message =
-      typeof payload === "object" &&
-      payload &&
-      "error" in payload &&
-      typeof (payload as { error?: { message?: string } | string }).error === "object"
-        ? (payload as { error?: { message?: string } }).error?.message
-        : typeof payload === "object" &&
-            payload &&
-            "error" in payload &&
-            typeof (payload as { error?: string }).error === "string"
-          ? (payload as { error: string }).error
-          : `Upstream ${provider} error (${upstream.status})`;
-    throw Object.assign(new Error(message || `Transcription failed (${upstream.status})`), {
-      status: upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502,
-    });
-  }
-
-  const data = payload as {
+  const data = parsed.data as {
     text?: string;
     language?: string;
     duration?: number;
@@ -271,7 +300,19 @@ export async function POST(req: NextRequest) {
   try {
     const { provider, apiKey, model, url } = resolveProvider();
 
-    const form = await req.formData();
+    let form: FormData;
+    try {
+      form = await req.formData();
+    } catch {
+      return NextResponse.json(
+        {
+          error:
+            "Could not read upload body. On Vercel Hobby the max request size is ~4.5 MB — try a shorter/smaller audio file.",
+        },
+        { status: 413 },
+      );
+    }
+
     const file = form.get("file");
     const language = String(form.get("language") || "").trim();
 
@@ -285,7 +326,9 @@ export async function POST(req: NextRequest) {
 
     if (file.size > MAX_BYTES) {
       return NextResponse.json(
-        { error: `File too large (max ${MAX_BYTES / (1024 * 1024)} MB on this plan).` },
+        {
+          error: `File too large for this Vercel function (${(file.size / (1024 * 1024)).toFixed(1)} MB). Keep under ${MAX_BYTES / (1024 * 1024)} MB, or compress the audio.`,
+        },
         { status: 413 },
       );
     }
@@ -293,14 +336,17 @@ export async function POST(req: NextRequest) {
     const result =
       provider === "xai"
         ? await transcribeWithXai(file, apiKey, language)
-        : await transcribeOpenAiCompatible(
-            file,
-            apiKey,
-            url,
-            model,
-            provider,
-            language,
-          );
+        : await transcribeOpenAiCompatible(file, apiKey, url, model, provider, language);
+
+    if (!result.text?.trim() && !result.segments?.length) {
+      return NextResponse.json(
+        {
+          error:
+            "Speech API returned an empty transcript. Try another file, or set language to en.",
+        },
+        { status: 502 },
+      );
+    }
 
     return NextResponse.json({
       provider,
@@ -332,6 +378,9 @@ export async function GET() {
       xai: hasXai,
       groq: hasGroq,
       openai: hasOpenAI,
+    },
+    limits: {
+      maxUploadMb: MAX_BYTES / (1024 * 1024),
     },
   });
 }

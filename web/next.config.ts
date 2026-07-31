@@ -1,10 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Allow larger media uploads for transcription
+  // Align with Vercel Hobby request body limits (~4.5 MB)
   experimental: {
     serverActions: {
-      bodySizeLimit: "25mb",
+      bodySizeLimit: "4.5mb",
     },
   },
 };
